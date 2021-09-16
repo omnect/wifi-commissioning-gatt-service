@@ -9,6 +9,7 @@ use bluer::{
         CharacteristicWriter,
     },
 };
+use enclose::enclose;
 use futures::{pin_mut, FutureExt, StreamExt};
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
 use tokio::{
@@ -16,7 +17,6 @@ use tokio::{
     sync::Mutex,
     time::{interval, sleep},
 };
-
 use wifiscanner;
 
 const SCAN_SERVICE_UUID: uuid::Uuid = uuid::Uuid::from_u128(0xd69a37ee1d8a4329bd2425db4af3c863);
@@ -176,7 +176,11 @@ async fn main() -> bluer::Result<()> {
     // Client is expected to write an 1 to start scan.
     // When scan is finished, server will set this value to 2 or 3.
     // Client is epxected to write a 0 to finish scan handling, allowing server to discard scan results.
-    let status_scan_value = Arc::new(Mutex::new(vec![0x00]));
+    const STATUS_SCAN_IDLE: u8 = 0u8;
+    const STATUS_SCAN_SCAN: u8 = 1u8;
+    const STATUS_SCAN_FINISHED: u8 = 2u8;
+    const STATUS_SCAN_ERROR: u8 = 3u8;
+    let status_scan_value = Arc::new(Mutex::new(vec![STATUS_SCAN_IDLE]));
 
     // Notifier instance for status_scan_value. Only one notification client is supported.
     let status_scan_notify_opt: Arc<Mutex<Option<CharacteristicWriter>>> =
@@ -190,7 +194,11 @@ async fn main() -> bluer::Result<()> {
     // Client is expected to write an 1 after setting ssid and psk to connect to this AP.
     // When connection is finished, server will set this value to 2 or 3.
     // Client is epxected to write a 0 to disconnect from the AP.
-    let state_connect_value = Arc::new(Mutex::new(vec![0x00]));
+    const STATE_CONNECT_IDLE: u8 = 0u8;
+    const STATE_CONNECT_CONNECT: u8 = 1u8;
+    const STATE_CONNECT_CONNECTED: u8 = 2u8;
+    const STATE_CONNECT_FAILED: u8 = 3u8;
+    let state_connect_value = Arc::new(Mutex::new(vec![STATE_CONNECT_IDLE]));
     let state_connect_notify_opt: Arc<Mutex<Option<CharacteristicWriter>>> =
         Arc::new(Mutex::new(Option::None));
 
@@ -203,12 +211,10 @@ async fn main() -> bluer::Result<()> {
     let psk_connect_value = Arc::new(Mutex::new(vec![0; 32]));
 
     // ------- handling of RESULT_SCAN_CHAR_UUID -------
-    let result_scan_value_clone = result_scan_value.clone();
     let result_scan_char_read = CharacteristicRead {
         read: true,
-        fun: Box::new(move |req| {
-            let result_scan_value = result_scan_value_clone.clone();
-            async move {
+        fun: Box::new(enclose!( (result_scan_value) move |req| {
+            enclose!( (result_scan_value) async move {
                 let result_scan_value = result_scan_value.lock().await.clone();
                 println!(
                     "Scan result read request {:?} with value {:x?}",
@@ -229,18 +235,16 @@ async fn main() -> bluer::Result<()> {
                 println!("Scan result read request returning {:x?}", &vector);
                 Ok(vector)
             }
-            .boxed()
-        }),
+            .boxed())
+        })),
         ..Default::default()
     };
 
     // ------- handling of SELECT_SCAN_CHAR_UUID -------
-    let select_scan_value_clone = select_scan_value.clone();
     let select_scan_char_read = CharacteristicRead {
         read: true,
-        fun: Box::new(move |req| {
-            let select_scan_value = select_scan_value_clone.clone();
-            async move {
+        fun: Box::new(enclose!( (select_scan_value) move |req| {
+            enclose!( (select_scan_value) async move {
                 let select_scan_value = select_scan_value.lock().await.clone();
                 println!(
                     "Scan select read request {:?} with value {:x?}",
@@ -248,66 +252,60 @@ async fn main() -> bluer::Result<()> {
                 );
                 Ok(select_scan_value)
             }
-            .boxed()
-        }),
-        ..Default::default()
-    };
-
-    let select_scan_value_clone = select_scan_value.clone();
-    let results_clone = results.clone();
-    let result_scan_value_clone = result_scan_value.clone();
-    let select_max_records_clone = select_max_records.clone();
-    let select_scan_char_write = CharacteristicWrite {
-        write: true,
-        write_without_response: true,
-        method: CharacteristicWriteMethod::Fun(Box::new(move |new_value, req| {
-            let select_scan_value = select_scan_value_clone.clone();
-            let results = results_clone.clone();
-            let result_scan_value = result_scan_value_clone.clone();
-            let select_max_records = select_max_records_clone.clone();
-            async move {
-                println!(
-                    "Scan select write request {:?} with value {:x?}",
-                    &req, &new_value
-                );
-                if new_value.len() > 1 {
-                    println!("Scan select write invalid length.");
-                    return Err(ReqError::NotSupported.into());
-                }
-                let select_max_records = select_max_records.lock().await;
-                if new_value[0] >= *select_max_records {
-                    println!(
-                        "Scan status write invalid index, expected to be < {:x?}.",
-                        select_max_records
-                    );
-                    return Err(ReqError::NotSupported.into());
-                }
-                let mut results_store = result_scan_value.lock().await;
-                let results_all = results.lock().await;
-                let offset: usize = (new_value[0] as usize) * RESULT_FIELD_LENGTH;
-                let mut size: usize = RESULT_FIELD_LENGTH;
-                if offset + size > results_all.len() {
-                    size = results_all.len() - offset;
-                }
-                let slice = &results_all[offset..(offset + size)];
-                let vector: Vec<u8> = slice.iter().cloned().collect();
-                *results_store = vector;
-                let mut select_scan_value = select_scan_value.lock().await;
-                *select_scan_value = new_value;
-                Ok(())
-            }
-            .boxed()
+            .boxed())
         })),
         ..Default::default()
     };
 
+    let select_scan_char_write = CharacteristicWrite {
+        write: true,
+        write_without_response: true,
+        method: CharacteristicWriteMethod::Fun(Box::new(
+            enclose!( (select_scan_value, results, result_scan_value, select_max_records)
+                move |new_value, req| {
+                    enclose!( (select_scan_value, results, result_scan_value, select_max_records)
+                    async move {
+                        println!(
+                            "Scan select write request {:?} with value {:x?}",
+                            &req, &new_value
+                        );
+                        if new_value.len() > 1 {
+                            println!("Scan select write invalid length.");
+                            return Err(ReqError::NotSupported.into());
+                        }
+                        let select_max_records = select_max_records.lock().await;
+                        if new_value[0] >= *select_max_records {
+                            println!(
+                                "Scan status write invalid index, expected to be < {:x?}.",
+                                select_max_records
+                            );
+                            return Err(ReqError::NotSupported.into());
+                        }
+                        let mut results_store = result_scan_value.lock().await;
+                        let results_all = results.lock().await;
+                        let offset: usize = (new_value[0] as usize) * RESULT_FIELD_LENGTH;
+                        let mut size: usize = RESULT_FIELD_LENGTH;
+                        if offset + size > results_all.len() {
+                            size = results_all.len() - offset;
+                        }
+                        let slice = &results_all[offset..(offset + size)];
+                        let vector: Vec<u8> = slice.iter().cloned().collect();
+                        *results_store = vector;
+                        let mut select_scan_value = select_scan_value.lock().await;
+                        *select_scan_value = new_value;
+                    Ok(())
+                }
+                .boxed())
+            }),
+        )),
+        ..Default::default()
+    };
+
     // ------- handling of STATUS_SCAN_CHAR_UUID -------
-    let status_scan_value_clone = status_scan_value.clone();
     let status_scan_char_read = CharacteristicRead {
         read: true,
-        fun: Box::new(move |req| {
-            let status_scan_value = status_scan_value_clone.clone();
-            async move {
+        fun: Box::new(enclose!( (status_scan_value) move |req| {
+            enclose!( (status_scan_value) async move {
                 let status_scan_value = status_scan_value.lock().await.clone();
                 println!(
                     "Scan status read request {:?} with value {:x?}",
@@ -315,100 +313,91 @@ async fn main() -> bluer::Result<()> {
                 );
                 Ok(status_scan_value)
             }
-            .boxed()
-        }),
+            .boxed())
+        })),
         ..Default::default()
     };
 
-    let status_scan_value_clone = status_scan_value.clone();
-    let results_clone = results.clone();
-    let select_max_records_clone = select_max_records.clone();
-    let status_scan_notify_opt_clone = status_scan_notify_opt.clone();
-    let select_scan_value_clone = select_scan_value.clone();
     let status_scan_char_write = CharacteristicWrite {
         write: true,
         write_without_response: true,
-        method: CharacteristicWriteMethod::Fun(Box::new(move |new_value, req| {
-            let status_scan_value = status_scan_value_clone.clone();
-            let results = results_clone.clone();
-            let select_max_records = select_max_records_clone.clone();
-            let status_scan_notify_opt = status_scan_notify_opt_clone.clone();
-            let select_scan_value = select_scan_value_clone.clone();
-            async move {
-                println!(
-                    "Scan status write request {:?} with value {:x?}",
-                    &req, &new_value
-                );
-                if new_value.len() > 1 {
-                    println!("Scan status write invalid length.");
-                    return Err(ReqError::NotSupported.into());
-                }
-                if new_value[0] != 0 && new_value[0] != 1 {
-                    println!("Scan status write invalid status, expected either 0 or 1.");
-                    return Err(ReqError::NotSupported.into());
-                }
-                let mut status_scan_value = status_scan_value.lock().await;
-                let old = status_scan_value[0];
-                status_scan_value[0] = new_value[0];
-                // 0 -> 1: Start scan
-                if new_value[0] == 1 && old == 0u8 {
-                    let scan_task = tokio::task::spawn_blocking(|| {
-                        println!("Starting SSID scan");
-                        let scan_result = wifiscanner::scan();
-                        println!("Finished SSID scan");
-                        scan_result
-                    });
-                    let scan_task_result = scan_task.await;
-                    let mut results_store = results.lock().await;
-                    let mut select_max_records = select_max_records.lock().await;
-                    let mut select_scan_value = select_scan_value.lock().await;
-                    match scan_task_result {
-                        Ok(Ok(found_hotspots)) => {
-                            let found_hotspots = format!("{:?}", found_hotspots);
-                            println!("Scan successful: {:?}", found_hotspots);
-                            status_scan_value[0] = 2u8; // scan finished
-                            let max_fields = (found_hotspots.len() + (RESULT_FIELD_LENGTH - 1))
-                                / RESULT_FIELD_LENGTH;
-                            if max_fields < 255 {
-                                *select_max_records = max_fields as u8;
-                                select_scan_value[0] = max_fields as u8;
-                                *results_store = found_hotspots.as_bytes().to_vec();
-                            } else {
-                                println!("Scan failed due to too many results");
-                                status_scan_value[0] = 3u8; // scan failed
+        method: CharacteristicWriteMethod::Fun(Box::new(
+            enclose!( (status_scan_value, results, select_max_records, status_scan_notify_opt, select_scan_value ) move |new_value, req| {
+                enclose!( (status_scan_value, results, select_max_records, status_scan_notify_opt, select_scan_value ) async move {
+                    println!(
+                        "Scan status write request {:?} with value {:x?}",
+                        &req, &new_value
+                    );
+                    if new_value.len() > 1 {
+                        println!("Scan status write invalid length.");
+                        return Err(ReqError::NotSupported.into());
+                    }
+                    if new_value[0] != STATUS_SCAN_IDLE && new_value[0] != STATUS_SCAN_SCAN {
+                        println!("Scan status write invalid status, expected either 0 or 1.");
+                        return Err(ReqError::NotSupported.into());
+                    }
+                    let mut status_scan_value = status_scan_value.lock().await;
+                    let old = status_scan_value[0];
+                    status_scan_value[0] = new_value[0];
+                    // 0 -> 1: Start scan
+                    if new_value[0] == STATUS_SCAN_SCAN && old == STATUS_SCAN_IDLE {
+                        let scan_task = tokio::task::spawn_blocking(|| {
+                            println!("Starting SSID scan");
+                            let scan_result = wifiscanner::scan();
+                            println!("Finished SSID scan");
+                            scan_result
+                        });
+                        let scan_task_result = scan_task.await;
+                        let mut results_store = results.lock().await;
+                        let mut select_max_records = select_max_records.lock().await;
+                        let mut select_scan_value = select_scan_value.lock().await;
+                        match scan_task_result {
+                            Ok(Ok(found_hotspots)) => {
+                                let found_hotspots = format!("{:?}", found_hotspots);
+                                println!("Scan successful: {:?}", found_hotspots);
+                                status_scan_value[0] = STATUS_SCAN_FINISHED; // scan finished
+                                let max_fields = (found_hotspots.len() + (RESULT_FIELD_LENGTH - 1))
+                                    / RESULT_FIELD_LENGTH;
+                                if max_fields < 255 {
+                                    *select_max_records = max_fields as u8;
+                                    select_scan_value[0] = max_fields as u8;
+                                    *results_store = found_hotspots.as_bytes().to_vec();
+                                } else {
+                                    println!("Scan failed due to too many results");
+                                    status_scan_value[0] = STATUS_SCAN_ERROR; // scan failed
+                                }
+                            }
+                            Ok(Err(e)) => {
+                                println!("Scan failed: {:?}", e);
+                                status_scan_value[0] = STATUS_SCAN_ERROR; // scan failed
+                            }
+                            Err(e) => {
+                                println!("Scan failed: {:?}", e);
+                                status_scan_value[0] = STATUS_SCAN_ERROR; // scan failed
                             }
                         }
-                        Ok(Err(e)) => {
-                            println!("Scan failed: {:?}", e);
-                            status_scan_value[0] = 3u8; // scan failed
+                        let mut opt = status_scan_notify_opt.lock().await;
+                        if let Some(writer) = opt.as_mut() {
+                            println!("Notifying scan status with value {:x?}", &status_scan_value);
+                            if let Err(err) = writer.write(&status_scan_value).await {
+                                println!("Notification stream error: {}", &err);
+                                *opt = None;
+                            }
                         }
-                        Err(e) => {
-                            println!("Scan failed: {:?}", e);
-                            status_scan_value[0] = 3u8; // scan failed
-                        }
+                    } else if new_value[0] == STATUS_SCAN_IDLE && old != STATUS_SCAN_IDLE {
+                        // 1 -> 0: Discard results
+                        let mut results_store = results.lock().await;
+                        *results_store = vec![0; RESULT_FIELD_LENGTH]; // clear results
+                        let mut select_max_records = select_max_records.lock().await;
+                        *select_max_records = 0u8;
+                        let mut select_scan_value = select_scan_value.lock().await;
+                        select_scan_value[0] = 0u8;
                     }
-                    let mut opt = status_scan_notify_opt.lock().await;
-                    if let Some(writer) = opt.as_mut() {
-                        println!("Notifying scan status with value {:x?}", &status_scan_value);
-                        if let Err(err) = writer.write(&status_scan_value).await {
-                            println!("Notification stream error: {}", &err);
-                            *opt = None;
-                        }
-                    }
-                } else if new_value[0] == 0 && old != 0u8 {
-                    // 1 -> 0: Discard results
-                    let mut results_store = results.lock().await;
-                    *results_store = vec![0; RESULT_FIELD_LENGTH]; // clear results
-                    let mut select_max_records = select_max_records.lock().await;
-                    *select_max_records = 0u8;
-                    let mut select_scan_value = select_scan_value.lock().await;
-                    select_scan_value[0] = 0u8;
-                    status_scan_value[0] = 0u8;
+                    Ok(())
                 }
-                Ok(())
-            }
-            .boxed()
-        })),
+                .boxed())
+            }),
+        )),
         ..Default::default()
     };
 
@@ -420,12 +409,10 @@ async fn main() -> bluer::Result<()> {
 
     // ------- handling of STATE_CONNECT_CHAR_UUID -------
 
-    let state_connect_value_clone = state_connect_value.clone();
     let state_connect_char_read = CharacteristicRead {
         read: true,
-        fun: Box::new(move |req| {
-            let state_connect_value = state_connect_value_clone.clone();
-            async move {
+        fun: Box::new(enclose!( (state_connect_value) move |req| {
+            enclose!( (state_connect_value) async move {
                 let state_connect_value = state_connect_value.lock().await.clone();
                 println!(
                     "Connect state read request {:?} with value {:x?}",
@@ -433,86 +420,79 @@ async fn main() -> bluer::Result<()> {
                 );
                 Ok(state_connect_value)
             }
-            .boxed()
-        }),
+            .boxed())
+        })),
         ..Default::default()
     };
 
-    let state_connect_value_clone = state_connect_value.clone();
-    let psk_connect_value_clone = psk_connect_value.clone();
-    let ssid_connect_value_clone = ssid_connect_value.clone();
-    let state_connect_notify_opt_clone = state_connect_notify_opt.clone();
     let state_connect_char_write = CharacteristicWrite {
         write: true,
         write_without_response: true,
-        method: CharacteristicWriteMethod::Fun(Box::new(move |new_value, req| {
-            let state_connect_value = state_connect_value_clone.clone();
-            let ssid_connect_value = ssid_connect_value_clone.clone();
-            let psk_connect_value = psk_connect_value_clone.clone();
-            let state_connect_notify_opt = state_connect_notify_opt_clone.clone();
-            async move {
-                println!(
-                    "Connect state write request {:?} with value {:x?}",
-                    &req, &new_value
-                );
-                if new_value.len() > 1 {
-                    println!("Connect state write invalid length.");
-                    return Err(ReqError::NotSupported.into());
-                }
-                if new_value[0] != 0 && new_value[0] != 1 {
-                    println!("Connect state write invalid status, expected either 0 or 1.");
-                    return Err(ReqError::NotSupported.into());
-                }
-                let mut state_connect_value = state_connect_value.lock().await;
-                let old = state_connect_value[0];
-                state_connect_value[0] = new_value[0];
-                if new_value[0] == 1 && old == 0u8 {
-                    // 0 -> 1: connect
-                    let ssid_connect_value = ssid_connect_value.lock().await;
-                    let psk_connect_value = psk_connect_value.lock().await;
-                    let result =
-                        connect(ssid_connect_value.clone(), psk_connect_value.clone()).await;
-                    match result {
-                        Err(e) => {
-                            println!("Connect failed: {:?}", e);
-                            state_connect_value[0] = 3u8;
-                            return Err(ReqError::Failed.into());
-                        }
-                        Ok(_o) => {
-                            println!("Connect successful, waiting for ip");
-                        }
-                    }
-                } else if new_value[0] == 0 && old != 0u8 {
-                    // 1 -> 0: disconnect
-                    let result = disconnect().await;
-                    match result {
-                        Err(e) => {
-                            println!("Disconnect failed: {:?}", e);
-                            state_connect_value[0] = 3u8;
-                            return Err(ReqError::Failed.into());
-                        }
-                        Ok(_o) => {
-                            println!("Disconnect successful");
-                            state_connect_value[0] = 0u8;
-                        }
-                    }
-                }
-
-                let mut opt = state_connect_notify_opt.lock().await;
-                if let Some(writer) = opt.as_mut() {
+        method: CharacteristicWriteMethod::Fun(Box::new(
+            enclose!( ( state_connect_value, psk_connect_value, ssid_connect_value, state_connect_notify_opt ) move |new_value, req| {
+                enclose!( ( state_connect_value, psk_connect_value, ssid_connect_value, state_connect_notify_opt ) async move {
                     println!(
-                        "Notifying connect state with value {:x?}",
-                        &state_connect_value
+                        "Connect state write request {:?} with value {:x?}",
+                        &req, &new_value
                     );
-                    if let Err(err) = writer.write(&state_connect_value).await {
-                        println!("Notification stream error: {}", &err);
-                        *opt = None;
+                    if new_value.len() > 1 {
+                        println!("Connect state write invalid length.");
+                        return Err(ReqError::NotSupported.into());
                     }
+                    if new_value[0] != 0 && new_value[0] != 1 {
+                        println!("Connect state write invalid status, expected either 0 or 1.");
+                        return Err(ReqError::NotSupported.into());
+                    }
+                    let mut state_connect_value = state_connect_value.lock().await;
+                    let old = state_connect_value[0];
+                    state_connect_value[0] = new_value[0];
+                    if new_value[0] == STATE_CONNECT_CONNECT && old == STATE_CONNECT_IDLE {
+                        // 0 -> 1: connect
+                        let ssid_connect_value = ssid_connect_value.lock().await;
+                        let psk_connect_value = psk_connect_value.lock().await;
+                        let result =
+                            connect(ssid_connect_value.clone(), psk_connect_value.clone()).await;
+                        match result {
+                            Err(e) => {
+                                println!("Connect failed: {:?}", e);
+                                state_connect_value[0] = STATE_CONNECT_FAILED;
+                                return Err(ReqError::Failed.into());
+                            }
+                            Ok(_o) => {
+                                println!("Connect successful, waiting for ip");
+                            }
+                        }
+                    } else if new_value[0] == STATE_CONNECT_IDLE && old != STATE_CONNECT_IDLE {
+                        // 1 -> 0: disconnect
+                        let result = disconnect().await;
+                        match result {
+                            Err(e) => {
+                                println!("Disconnect failed: {:?}", e);
+                                state_connect_value[0] = STATE_CONNECT_FAILED;
+                                return Err(ReqError::Failed.into());
+                            }
+                            Ok(_o) => {
+                                println!("Disconnect successful");
+                            }
+                        }
+                    }
+
+                    let mut opt = state_connect_notify_opt.lock().await;
+                    if let Some(writer) = opt.as_mut() {
+                        println!(
+                            "Notifying connect state with value {:x?}",
+                            &state_connect_value
+                        );
+                        if let Err(err) = writer.write(&state_connect_value).await {
+                            println!("Notification stream error: {}", &err);
+                            *opt = None;
+                        }
+                    }
+                    Ok(())
                 }
-                Ok(())
-            }
-            .boxed()
-        })),
+                .boxed())
+            }),
+        )),
         ..Default::default()
     };
     let state_connect_char_notify = CharacteristicNotify {
@@ -521,12 +501,10 @@ async fn main() -> bluer::Result<()> {
         ..Default::default()
     };
 
-    let ssid_connect_value_clone = ssid_connect_value.clone();
     let ssid_connect_char_read = CharacteristicRead {
         read: true,
-        fun: Box::new(move |req| {
-            let ssid_connect_value = ssid_connect_value_clone.clone();
-            async move {
+        fun: Box::new(enclose!( ( ssid_connect_value ) move |req| {
+            enclose!( ( ssid_connect_value ) async move {
                 let ssid_connect_value = ssid_connect_value.lock().await.clone();
                 println!(
                     "Connect SSID read request {:?} with value {:x?}",
@@ -547,36 +525,36 @@ async fn main() -> bluer::Result<()> {
                 println!("Connect SSID read request returning {:x?}", &vector);
                 Ok(vector)
             }
-            .boxed()
-        }),
+            .boxed())
+        })),
         ..Default::default()
     };
 
-    let ssid_connect_value_clone = ssid_connect_value.clone();
     let ssid_connect_char_write = CharacteristicWrite {
         write: true,
         // due to its length, this characteristic cannot be written with only one Write command,
         // so a write without response is not possible
         write_without_response: false,
-        method: CharacteristicWriteMethod::Fun(Box::new(move |new_value, req| {
-            let ssid_connect_value = ssid_connect_value_clone.clone();
-            async move {
-                println!(
-                    "Connect SSID write request {:?} with value {:x?}",
-                    &req, &new_value
-                );
-                let offset = req.offset as usize;
-                let len = new_value.len();
-                if len + offset > 32 {
-                    println!("Connect SSID write invalid length.");
-                    return Err(ReqError::NotSupported.into());
+        method: CharacteristicWriteMethod::Fun(Box::new(
+            enclose!( ( ssid_connect_value ) move |new_value, req| {
+                enclose!( ( ssid_connect_value ) async move {
+                    println!(
+                        "Connect SSID write request {:?} with value {:x?}",
+                        &req, &new_value
+                    );
+                    let offset = req.offset as usize;
+                    let len = new_value.len();
+                    if len + offset > 32 {
+                        println!("Connect SSID write invalid length.");
+                        return Err(ReqError::NotSupported.into());
+                    }
+                    let mut ssid_connect_value = ssid_connect_value.lock().await;
+                    ssid_connect_value.splice(offset..offset + len, new_value.iter().cloned());
+                    Ok(())
                 }
-                let mut ssid_connect_value = ssid_connect_value.lock().await;
-                ssid_connect_value.splice(offset..offset + len, new_value.iter().cloned());
-                Ok(())
-            }
-            .boxed()
-        })),
+                .boxed())
+            }),
+        )),
         ..Default::default()
     };
 
@@ -585,69 +563,68 @@ async fn main() -> bluer::Result<()> {
         // due to its length, this characteristic cannot be written with only one Write command,
         // so a write without response is not possible
         write_without_response: false,
-        method: CharacteristicWriteMethod::Fun(Box::new(move |new_value, req| {
-            let psk_connect_value = psk_connect_value.clone();
-            async move {
-                println!(
-                    "Connect PSK write request {:?} with value {:x?}",
-                    &req, &new_value
-                );
-                let offset = req.offset as usize;
-                let len = new_value.len();
-                if len + offset > 32 {
-                    println!("Connect PSK write invalid length.");
-                    return Err(ReqError::NotSupported.into());
+        method: CharacteristicWriteMethod::Fun(Box::new(
+            enclose!( ( psk_connect_value ) move |new_value, req| {
+                enclose!( ( psk_connect_value ) async move {
+                    println!(
+                        "Connect PSK write request {:?} with value {:x?}",
+                        &req, &new_value
+                    );
+                    let offset = req.offset as usize;
+                    let len = new_value.len();
+                    if len + offset > 32 {
+                        println!("Connect PSK write invalid length.");
+                        return Err(ReqError::NotSupported.into());
+                    }
+                    let mut psk_connect_value = psk_connect_value.lock().await;
+                    psk_connect_value.splice(offset..offset + len, new_value.iter().cloned());
+                    Ok(())
                 }
-                let mut psk_connect_value = psk_connect_value.lock().await;
-                psk_connect_value.splice(offset..offset + len, new_value.iter().cloned());
-                Ok(())
-            }
-            .boxed()
-        })),
+                .boxed())
+            }),
+        )),
         ..Default::default()
     };
 
     let security_connect_value = Arc::new(Mutex::new(vec![0]));
 
-    let security_connect_value_clone = security_connect_value.clone();
     let security_connect_char_read = CharacteristicRead {
         read: true,
-        fun: Box::new(move |req| {
-            let value = security_connect_value_clone.clone();
-            async move {
-                let security_connect_value = value.lock().await.clone();
+        fun: Box::new(enclose!( (security_connect_value) move |req| {
+            enclose!( (security_connect_value) async move {
+                let security_connect_value = security_connect_value.lock().await.clone();
                 println!(
                     "Connect security read request {:?} with value {:x?}",
                     &req, &security_connect_value
                 );
                 Ok(security_connect_value)
             }
-            .boxed()
-        }),
+            .boxed())
+        })),
         ..Default::default()
     };
 
-    let security_connect_value_clone = security_connect_value.clone();
     let security_connect_char_write = CharacteristicWrite {
         write: true,
         write_without_response: true,
-        method: CharacteristicWriteMethod::Fun(Box::new(move |new_value, req| {
-            let security_connect_value = security_connect_value_clone.clone();
-            async move {
-                println!(
-                    "Connect state write request {:?} with value {:x?}",
-                    &req, &new_value
-                );
-                if new_value.len() > 1 {
-                    println!("Connect security write invalid length.");
-                    return Err(ReqError::NotSupported.into());
+        method: CharacteristicWriteMethod::Fun(Box::new(
+            enclose!( (security_connect_value ) move |new_value, req| {
+                enclose!( (security_connect_value ) async move {
+                    println!(
+                        "Connect state write request {:?} with value {:x?}",
+                        &req, &new_value
+                    );
+                    if new_value.len() > 1 {
+                        println!("Connect security write invalid length.");
+                        return Err(ReqError::NotSupported.into());
+                    }
+                    let mut security_connect_value = security_connect_value.lock().await;
+                    *security_connect_value = new_value;
+                    Ok(())
                 }
-                let mut security_connect_value = security_connect_value.lock().await;
-                *security_connect_value = new_value;
-                Ok(())
-            }
-            .boxed()
-        })),
+                .boxed())
+            }),
+        )),
         ..Default::default()
     };
 
@@ -756,17 +733,17 @@ async fn main() -> bluer::Result<()> {
             }
             _ = interval.tick() => {
                 let mut state_connect_value = state_connect_value.lock().await;
-                if state_connect_value[0] == 1u8 {
+                if state_connect_value[0] == STATE_CONNECT_CONNECT {
                     let result = status().await;
                     match result {
                         Err(e) => {
                             println!("Status failed: {:?}", e);
-                            state_connect_value[0] = 3u8;
+                            state_connect_value[0] = STATE_CONNECT_FAILED;
                         }
                         Ok((status, ip)) => {
                             if status == 1u8 && ip != "<unknown>" {
                                 println!("Connected with ip {:?}", ip);
-                                state_connect_value[0] = 2u8;
+                                state_connect_value[0] = STATE_CONNECT_CONNECTED;
                             }
                         }
                     }
