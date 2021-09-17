@@ -353,15 +353,25 @@ async fn main() -> bluer::Result<()> {
                         let mut select_scan_value = select_scan_value.lock().await;
                         match scan_task_result {
                             Ok(Ok(found_hotspots)) => {
-                                let found_hotspots = format!("{:?}", found_hotspots);
-                                println!("Scan successful: {:?}", found_hotspots);
+                                let mut json: String = String::new();
+                                json.push_str("[");
+                                for item in found_hotspots {
+                                    if json.len() > 1 { json.push_str(","); }
+                                    json.push_str( &format!("{{\"ssid\":\"{}\",\
+                                                \"rssi\":\"{}\",\
+                                                \"mac\":\"{}\",\
+                                                \"ch\":\"{}\"}}",
+                                      item.ssid, item.signal_level, item.mac, item.channel ));
+                                }
+                                json.push_str("]");
+                                println!("Scan successful: {:?}", json);
                                 status_scan_value[0] = STATUS_SCAN_FINISHED; // scan finished
-                                let max_fields = (found_hotspots.len() + (RESULT_FIELD_LENGTH - 1))
+                                let max_fields = (json.len() + (RESULT_FIELD_LENGTH - 1))
                                     / RESULT_FIELD_LENGTH;
                                 if max_fields < 255 {
                                     *select_max_records = max_fields as u8;
                                     select_scan_value[0] = max_fields as u8;
-                                    *results_store = found_hotspots.as_bytes().to_vec();
+                                    *results_store = json.as_bytes().to_vec();
                                 } else {
                                     println!("Scan failed due to too many results");
                                     status_scan_value[0] = STATUS_SCAN_ERROR; // scan failed
@@ -549,7 +559,17 @@ async fn main() -> bluer::Result<()> {
                         return Err(ReqError::NotSupported.into());
                     }
                     let mut ssid_connect_value = ssid_connect_value.lock().await;
-                    ssid_connect_value.splice(offset..offset + len, new_value.iter().cloned());
+                    // The SSID field is variable length, and the user might write first a long ssid
+                    // and then a shorter one. We should not leave characters from the first write
+                    // in the value, so clear it here.
+                    if offset == 0 {
+                        ssid_connect_value.clear();
+                    }
+                    let mut endoffset = offset + len;
+                    if endoffset > ssid_connect_value.len() {
+                        endoffset = ssid_connect_value.len();
+                    }
+                    ssid_connect_value.splice(offset..endoffset, new_value.iter().cloned());
                     Ok(())
                 }
                 .boxed())
@@ -732,6 +752,7 @@ async fn main() -> bluer::Result<()> {
                 }
             }
             _ = interval.tick() => {
+                let mut notify = false;
                 let mut state_connect_value = state_connect_value.lock().await;
                 if state_connect_value[0] == STATE_CONNECT_CONNECT {
                     let result = status().await;
@@ -739,12 +760,27 @@ async fn main() -> bluer::Result<()> {
                         Err(e) => {
                             println!("Status failed: {:?}", e);
                             state_connect_value[0] = STATE_CONNECT_FAILED;
+                            notify = true;
                         }
                         Ok((status, ip)) => {
                             if status == 1u8 && ip != "<unknown>" {
                                 println!("Connected with ip {:?}", ip);
                                 state_connect_value[0] = STATE_CONNECT_CONNECTED;
+                                notify = true
                             }
+                        }
+                    }
+                }
+                if notify {
+                    let mut opt = state_connect_notify_opt.lock().await;
+                    if let Some(writer) = opt.as_mut() {
+                        println!(
+                            "Notifying connect state with value {:x?}",
+                            &state_connect_value
+                        );
+                        if let Err(err) = writer.write(&state_connect_value).await {
+                            println!("Notification stream error: {}", &err);
+                            *opt = None;
                         }
                     }
                 }
