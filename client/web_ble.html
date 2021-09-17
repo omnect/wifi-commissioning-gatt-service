@@ -1,0 +1,202 @@
+<!doctype html>
+<!--
+Copyright 2019 Google Inc. All Rights Reserved.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+
+<!--
+This work is based on the example 'Read Characteristic Value Changed' 
+contributed by the Google Chrome Team at 
+https://googlechrome.github.io/samples/web-bluetooth/
+It has been modified by the Silicon Labs Apps Team to support an 
+application of Wi-Fi commissioning using Web BLE.
+It is made available as an example under the terms of the 
+Apache License, Version 2.0
+-->
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="description" content="Sample illustrating the use of Web Bluetooth to perform Wi-Fi commissioning.">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <style>
+      .buttons {
+        width: 250px;
+        text-align-last:center;
+      }
+    </style>
+
+    <script src="web_ble.js"></script>
+    <script src="sha1.js"></script>
+	<script src="pbkdf2.js"></script>
+
+    <title>Wi-Fi Commissioning using Web BLE</title>
+
+    <script>
+      // Add a global error event listener early on in the page load, to help ensure that browsers
+      // which don't support specific functionality still end up displaying a meaningful message.
+      window.addEventListener('error', function(error) {
+        if (ChromeSamples && ChromeSamples.setStatus) {
+          console.error(error);
+          ChromeSamples.setStatus(error.message + ' (Your browser may not support this feature.)');
+          error.preventDefault();
+        }
+      });
+    </script>   
+  </head>
+
+  <body>
+   <h3>Wi-Fi Commissioning using Web BLE</h3>
+
+   <script>
+     if('serviceWorker' in navigator) {
+       navigator.serviceWorker.register('service-worker.js');
+     }
+   </script>
+
+   <table align="center">
+     <tr>
+       <td>
+          <button id="btnConnect" class="buttons">Connect Bluetooth Device</button>
+       </td>
+     </tr>
+     <tr>
+        <td>
+          <button id="btnScan" class="buttons" disabled>Find Access Points</button>
+        </td>
+      </tr>
+      <tr>
+        <td>
+          <select id="selAccessPoint" class="buttons" disabled><option></option></select>
+        </td>
+      </tr>
+      <tr>
+        <td>
+          <input id="txtPassword" type="password" style="width:246px;text-align-last:center;" value="" disabled/>
+        </td>
+      </tr>
+      <tr>
+        <td>
+          <button id="btnSend" class="buttons" disabled>Send Access Point to device and connect</button>
+        </td>
+      </tr>      
+      <tr>
+        <td>
+          <button id="btnReset" class="buttons" disabled>Reset Bluetooth Device</button>
+        </td>
+      </tr>
+   </table>
+
+  <script>
+    // Live Logger
+
+    var ChromeSamples = {
+      log: function() {
+        var line = Array.prototype.slice.call(arguments).map(function(argument) {
+          return typeof argument === 'string' ? argument : JSON.stringify(argument);
+        }).join(' ');
+
+        document.querySelector('#log').textContent += line + '\n';
+
+        document.querySelector('#output').scrollTop = document.querySelector('#output').scrollHeight;
+      },
+
+      clearLog: function() {
+        document.querySelector('#log').textContent = '';
+      },
+
+      setStatus: function(status) {
+        document.querySelector('#status').textContent = status;
+      },
+
+      setContent: function(newContent) {
+        var content = document.querySelector('#content');
+        while(content.hasChildNodes()) {
+          content.removeChild(content.lastChild);
+        }
+        content.appendChild(newContent);
+      }
+    };
+  </script>
+
+  <h3>Live Output</h3>
+  <div id="output" class="output"
+   style="height:220px; max-height: 220px; overflow-y: scroll; background-color:black; color:gray; font-family: 'Courier New', Courier, monospace; font-size: 8pt;">
+   <div id="content"></div>
+   <div id="status"></div>
+   <pre id="log"></pre>
+  </div>
+
+  <script>
+    if (/Chrome\/(\d+\.\d+.\d+.\d+)/.test(navigator.userAgent)){
+      // Let's log a warning if the sample is not 
+      // supposed to execute on this version of Chrome.
+      if (55 > parseInt(RegExp.$1)) {
+        ChromeSamples.setStatus('Warning! Keep in mind this sample has been tested with Chrome ' + 55 + '.');
+      }
+    }
+  </script>
+
+  <script>
+    // Adding Button Click Event Listeners
+    // The event handlers are defined in web_ble.js
+
+    document.querySelector('#btnConnect').addEventListener('click', function() {
+      if (isWebBluetoothEnabled()) {
+        onConnectButtonClick();
+      }
+    });
+
+    document.querySelector('#btnScan').addEventListener('click', function() {
+      if (isWebBluetoothEnabled()) {
+        onScanButtonClick();
+      }
+    });
+
+    document.querySelector('#btnSend').addEventListener('click', function() {
+      if (isWebBluetoothEnabled()) {
+        onSendButtonClick();
+      }
+    });
+
+    document.querySelector('#btnReset').addEventListener('click', function(event) {
+      if (isWebBluetoothEnabled()) {
+        ChromeSamples.clearLog();
+        onResetButtonClick();
+      }
+    });
+
+  </script>
+
+  <script>
+    // Web Bluetooth API support verifier.
+
+    log = ChromeSamples.log;
+
+    function isWebBluetoothEnabled() {
+      if (navigator.bluetooth) {
+        return true;
+      } else {
+        ChromeSamples.setStatus('Web Bluetooth API is not available.\n' +
+            'Please make sure the "Experimental Web Platform" features flag is enabled:\n' +
+            'chrome://flags/#enable-experimental-web-platform-features');
+        return false;
+      }
+    }
+  </script>
+    
+ </body>
+</html>
