@@ -8,7 +8,8 @@ use enclose::enclose;
 use futures::FutureExt;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use wifiscanner;
+
+pub mod scan;
 
 const RESULT_FIELD_LENGTH: usize = 100;
 
@@ -69,10 +70,7 @@ async fn read_result(
     req: CharacteristicReadRequest,
 ) -> ReqResult<Vec<u8>> {
     let result_scan_value = shared.result_scan_value.lock().await.clone();
-    println!(
-        "Scan result read request {:?} with value {:x?}",
-        &req, &result_scan_value
-    );
+    println!("Scan result read request {:?}", &req);
     let offset = req.offset as usize;
     let mtu = req.mtu as usize;
     if offset > result_scan_value.len() {
@@ -123,48 +121,22 @@ async fn write_status(
     status_scan_value[0] = new_value[0];
     // 0 -> 1: Start scan
     if new_value[0] == STATUS_SCAN_SCAN && old == STATUS_SCAN_IDLE {
-        let scan_task = tokio::task::spawn_blocking(|| {
-            println!("Starting SSID scan");
-            let scan_result = wifiscanner::scan();
-            println!("Finished SSID scan");
-            scan_result
-        });
-        let scan_task_result = scan_task.await;
+        let scan_task_result = scan::scan().await;
         let mut results_store = shared.results.lock().await;
         let mut select_max_records = shared.select_max_records.lock().await;
         let mut select_scan_value = shared.select_scan_value.lock().await;
         match scan_task_result {
-            Ok(Ok(found_hotspots)) => {
-                let mut json: String = String::new();
-                json.push_str("[");
-                for item in found_hotspots {
-                    if json.len() > 1 {
-                        json.push_str(",");
-                    }
-                    json.push_str(&format!(
-                        "{{\"ssid\":\"{}\",\
-                           \"rssi\":\"{}\",\
-                           \"mac\":\"{}\",\
-                           \"ch\":\"{}\"}}",
-                        item.ssid, item.signal_level, item.mac, item.channel
-                    ));
-                }
-                json.push_str("]");
-                println!("Scan successful: {:?}", json);
+            Ok(json) => {
                 status_scan_value[0] = STATUS_SCAN_FINISHED; // scan finished
                 let max_fields = (json.len() + (RESULT_FIELD_LENGTH - 1)) / RESULT_FIELD_LENGTH;
                 if max_fields < 255 {
                     *select_max_records = max_fields as u8;
                     select_scan_value[0] = max_fields as u8;
-                    *results_store = json.as_bytes().to_vec();
+                    *results_store = json;
                 } else {
                     println!("Scan failed due to too many results");
                     status_scan_value[0] = STATUS_SCAN_ERROR; // scan failed
                 }
-            }
-            Ok(Err(e)) => {
-                println!("Scan failed: {:?}", e);
-                status_scan_value[0] = STATUS_SCAN_ERROR; // scan failed
             }
             Err(e) => {
                 println!("Scan failed: {:?}", e);
