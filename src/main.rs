@@ -9,14 +9,41 @@ use tokio::time::interval;
 
 const MANUFACTURER_ID: u16 = 0xc6c6;
 
+async fn get_adapter() -> Result<(bluer::Adapter, String), String> {
+    let session = bluer::Session::new().await.map_err(|e| e.to_string())?;
+    println!("got session");
+    let adapter_names = session.adapter_names().await.map_err(|e| e.to_string())?;
+    println!("got adapter");
+    let adapter_name = adapter_names.first();
+    match adapter_name {
+        Some(s) => Ok((
+            session.adapter(s).map_err(|e| e.to_string())?,
+            s.to_string(),
+        )),
+        None => Err("No adapter found".to_string()),
+    }
+}
+
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> bluer::Result<()> {
     env_logger::init();
 
-    let session = bluer::Session::new().await?;
-    let adapter_names = session.adapter_names().await?;
-    let adapter_name = adapter_names.first().expect("No Bluetooth adapter present");
-    let adapter = session.adapter(adapter_name)?;
+    let adapter: bluer::Adapter;
+    let adapter_name: String;
+    loop {
+        let adapter_and_name = get_adapter().await;
+        match adapter_and_name {
+            Ok((a, n)) => {
+                adapter = a;
+                adapter_name = n.to_string();
+            }
+            Err(_e) => {
+                std::thread::sleep(Duration::from_secs(1));
+                continue;
+            }
+        };
+        break;
+    }
     adapter.set_powered(true).await?;
 
     println!(
