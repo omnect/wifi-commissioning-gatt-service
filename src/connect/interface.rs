@@ -71,7 +71,7 @@ pub async fn disconnect() -> Result<(), String> {
     let mut wpa = wpactrl::WpaCtrl::new()
         .ctrl_path("/var/run/wpa_supplicant/wlan0")
         .open()
-        .unwrap();
+        .map_err(|e| e.to_string())?;
     let output = wpa.request("DISCONNECT").map_err(|e| e.to_string())?;
     if output.trim() == "FAIL" {
         return Err("DISCONNECT failed.".to_string());
@@ -83,7 +83,7 @@ pub async fn status() -> Result<(u8, String), String> {
     let mut wpa = wpactrl::WpaCtrl::new()
         .ctrl_path("/var/run/wpa_supplicant/wlan0")
         .open()
-        .unwrap();
+        .map_err(|e| e.to_string())?;
     let output = wpa.request("STATUS").map_err(|e| e.to_string())?;
     if output.trim() == "FAIL" {
         return Err("STATUS failed.".to_string());
