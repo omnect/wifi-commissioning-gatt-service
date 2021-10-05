@@ -38,6 +38,8 @@ Connection successful
 ...
 [DmWifiConfig]# menu gatt
 ...
+[DmWifiConfig]# select-attribute 811ce666-22e0-4a6d-a50f-0c78e076faa6
+[raspberrypi:/service00XX/char00XX]# write "0x00 0x00 0x00 ... 0x00" # insert sha-3 hash of device id here
 [DmWifiConfig]# select-attribute 811ce666-22e0-4a6d-a50f-0c78e076faa0
 [raspberrypi:/service00e5/char00ea]# read
 Attempting to read /org/bluez/hci0/dev_B8_27_EB_EB_B8_7A/service00e5/char00ea
