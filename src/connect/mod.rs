@@ -1,3 +1,4 @@
+use crate::authorize;
 use bluer::gatt::local::{
     characteristic_control, service_control, Characteristic, CharacteristicNotifier,
     CharacteristicNotify, CharacteristicNotifyMethod, CharacteristicRead,
@@ -42,15 +43,19 @@ struct ConnectSharedData {
     // PSK = PBKDF2(HMAC−SHA1, passphrase, ssid, 4096, 256)
     // see https://en.wikipedia.org/wiki/PBKDF2
     psk_connect_value: Mutex<Vec<u8>>,
+    authorized: Arc<Mutex<dyn Authorized + Send + Sync>>,
+    interface: String,
 }
 
 impl ConnectSharedData {
-    fn new() -> ConnectSharedData {
+    fn new(interf: String, auth: Arc<Mutex<dyn Authorized + Send + Sync>>) -> ConnectSharedData {
         ConnectSharedData {
             state_connect_value: Mutex::new(vec![STATE_CONNECT_IDLE]),
             ssid_connect_value: Mutex::new(vec![0; 32]),
             psk_connect_value: Mutex::new(vec![0; 32]),
             state_connect_notify_opt: Mutex::new(Option::None),
+            authorized: auth,
+            interface: interf,
         }
     }
 }
@@ -59,6 +64,10 @@ async fn read_state(
     shared: Arc<ConnectSharedData>,
     req: CharacteristicReadRequest,
 ) -> ReqResult<Vec<u8>> {
+    if !shared.authorized.lock().await.is_authorized().await {
+        println!("Connect state read no auth {:?}", &req);
+        return Err(ReqError::NotAuthorized.into());
+    }
     let state_connect_value = shared.state_connect_value.lock().await.clone();
     println!(
         "Connect state read request {:?} with value {:x?}",
@@ -72,6 +81,10 @@ async fn write_state(
     new_value: Vec<u8>,
     req: CharacteristicWriteRequest,
 ) -> ReqResult<()> {
+    if !shared.authorized.lock().await.is_authorized().await {
+        println!("Connect state write no auth {:?}", &req);
+        return Err(ReqError::NotAuthorized.into());
+    }
     println!(
         "Connect state write request {:?} with value {:x?}",
         &req, &new_value
@@ -91,8 +104,12 @@ async fn write_state(
         // 0 -> 1: connect
         let ssid_connect_value = shared.ssid_connect_value.lock().await;
         let psk_connect_value = shared.psk_connect_value.lock().await;
-        let result =
-            interface::connect(ssid_connect_value.clone(), psk_connect_value.clone()).await;
+        let result = interface::connect(
+            shared.interface.clone(),
+            ssid_connect_value.clone(),
+            psk_connect_value.clone(),
+        )
+        .await;
         match result {
             Err(e) => {
                 println!("Connect failed: {:?}", e);
@@ -105,7 +122,7 @@ async fn write_state(
         }
     } else if new_value[0] == STATE_CONNECT_IDLE && old != STATE_CONNECT_IDLE {
         // 1 -> 0: disconnect
-        let result = interface::disconnect().await;
+        let result = interface::disconnect(shared.interface.clone()).await;
         match result {
             Err(e) => {
                 println!("Disconnect failed: {:?}", e);
@@ -145,6 +162,10 @@ async fn read_ssid(
     shared: Arc<ConnectSharedData>,
     req: CharacteristicReadRequest,
 ) -> ReqResult<Vec<u8>> {
+    if !shared.authorized.lock().await.is_authorized().await {
+        println!("Connect SSID read no auth {:?}", &req);
+        return Err(ReqError::NotAuthorized.into());
+    }
     let ssid_connect_value = shared.ssid_connect_value.lock().await.clone();
     println!(
         "Connect SSID read request {:?} with value {:x?}",
@@ -171,6 +192,10 @@ async fn write_ssid(
     new_value: Vec<u8>,
     req: CharacteristicWriteRequest,
 ) -> ReqResult<()> {
+    if !shared.authorized.lock().await.is_authorized().await {
+        println!("Connect SSID write no auth {:?}", &req);
+        return Err(ReqError::NotAuthorized.into());
+    }
     println!(
         "Connect SSID write request {:?} with value {:x?}",
         &req, &new_value
@@ -201,6 +226,10 @@ async fn write_psk(
     new_value: Vec<u8>,
     req: CharacteristicWriteRequest,
 ) -> ReqResult<()> {
+    if !shared.authorized.lock().await.is_authorized().await {
+        println!("Connect PSK write no auth {:?}", &req);
+        return Err(ReqError::NotAuthorized.into());
+    }
     println!(
         "Connect PSK write request {:?} with value {:x?}",
         &req, &new_value
@@ -216,14 +245,19 @@ async fn write_psk(
     Ok(())
 }
 
+use authorize::Authorized;
+
 pub struct ConnectService {
     shared: Arc<ConnectSharedData>,
 }
 
 impl ConnectService {
-    pub fn new() -> ConnectService {
+    pub fn new(
+        interface: String,
+        auth: Arc<Mutex<dyn Authorized + Send + Sync>>,
+    ) -> ConnectService {
         ConnectService {
-            shared: Arc::new(ConnectSharedData::new()),
+            shared: Arc::new(ConnectSharedData::new(interface, auth)),
         }
     }
     pub fn service_entry(&mut self) -> Service {
@@ -316,7 +350,7 @@ impl ConnectService {
         let mut notify = false;
         let mut state_connect_value = self.shared.state_connect_value.lock().await;
         if state_connect_value[0] == STATE_CONNECT_CONNECT {
-            let result = interface::status().await;
+            let result = interface::status(self.shared.interface.clone()).await;
             match result {
                 Err(e) => {
                     println!("Status failed: {:?}", e);

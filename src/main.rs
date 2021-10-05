@@ -1,11 +1,25 @@
+pub mod authorize;
 pub mod connect;
 pub mod scan;
 
+use authorize::AuthorizeService;
 use bluer::{adv::Advertisement, gatt::local::Application};
+use clap::{AppSettings, Clap};
 use connect::ConnectService;
 use scan::ScanService;
-use std::{collections::BTreeMap, time::Duration};
+use std::{collections::BTreeMap, sync::Arc, time::Duration};
+use tokio::sync::Mutex;
 use tokio::time::interval;
+
+#[derive(Clap)]
+#[clap(version = "0.1.4", author = "Roland Erk <roland.erk@conplement.de")]
+#[clap(setting = AppSettings::ColoredHelp)]
+struct Opts {
+    #[clap(short, long, default_value = "wlan0")]
+    interface: String,
+    #[clap(short, long)]
+    device_id: String,
+}
 
 const MANUFACTURER_ID: u16 = 0xc6c6;
 
@@ -27,6 +41,8 @@ async fn get_adapter() -> Result<(bluer::Adapter, String), String> {
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> bluer::Result<()> {
     env_logger::init();
+
+    let opts: Opts = Opts::parse();
 
     let adapter: bluer::Adapter;
     let adapter_name: String;
@@ -73,15 +89,16 @@ async fn main() -> bluer::Result<()> {
         &adapter_name
     );
 
-    let mut scan_service = ScanService::new();
-    let mut connect_service = ConnectService::new();
-
-    // (initial) values for the characteristics
+    let authorize_service = Arc::new(Mutex::new(AuthorizeService::new(opts.device_id.clone())));
+    let mut scan_service = ScanService::new(opts.interface.clone(), authorize_service.clone());
+    let mut connect_service =
+        ConnectService::new(opts.interface.clone(), authorize_service.clone());
 
     let app = Application {
         services: vec![
             scan_service.service_entry(),
             connect_service.service_entry(),
+            authorize_service.clone().lock().await.service_entry(),
         ],
     };
     let _app_handle = adapter.serve_gatt_application(app).await?;
@@ -92,14 +109,8 @@ async fn main() -> bluer::Result<()> {
         tokio::select! {
             _ = interval.tick() => {
                 connect_service.tick().await;
+                authorize_service.clone().lock().await.tick().await;
             }
         }
     }
-
-    // println!("Removing service and advertisement");
-    // drop(app_handle);
-    // drop(adv_handle);
-    // sleep(Duration::from_secs(1)).await;
-
-    // Ok(())
 }

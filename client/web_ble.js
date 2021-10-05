@@ -19,6 +19,9 @@ const CHR_WIFI_CONFIG_STATE_UUID        = '811ce666-22e0-4a6d-a50f-0c78e076faa3'
 const CHR_WIFI_CONFIG_SSID_UUID         = '811ce666-22e0-4a6d-a50f-0c78e076faa4';
 const CHR_WIFI_CONFIG_PASSWORD_UUID     = '811ce666-22e0-4a6d-a50f-0c78e076faa5';
 
+const SVC_WIFI_AUTH_UUID                = 'd69a37ee-1d8a-4329-bd24-25db4af3c865';
+const CHR_WIFI_AUTH_KEY_UUID            = '811ce666-22e0-4a6d-a50f-0c78e076faa6';
+
 // Wi-Fi Scanner State Machine States
 const WIFI_SCANNER_STATE_IDLE     = 0;
 const WIFI_SCANNER_STATE_SCAN     = 1;
@@ -30,6 +33,8 @@ const WIFI_CONFIG_STATE_IDLE      = 0;
 const WIFI_CONFIG_STATE_CONNECT   = 1;
 const WIFI_CONFIG_STATE_JOINED    = 2;
 const WIFI_CONFIG_STATE_ERROR     = 3;
+
+const DEVICE_ID = 'some-random-id';
 
 // Global Variables
 var bluetoothDevice;
@@ -44,7 +49,7 @@ async function requestDevice() {
   log('> Requesting Bluetooth Devices DmWifiConfig*...');
   bluetoothDevice = await navigator.bluetooth.requestDevice({
       filters: [{namePrefix: 'DmWifiConfig'}],
-      optionalServices: [SVC_WIFI_SCANNER_UUID, SVC_WIFI_CONFIG_UUID]
+      optionalServices: [SVC_WIFI_SCANNER_UUID, SVC_WIFI_CONFIG_UUID, SVC_WIFI_AUTH_UUID]
       });
   bluetoothDevice.addEventListener('gattserverdisconnected', onDisconnected);
 }
@@ -95,6 +100,15 @@ async function connectDeviceAndCacheCharacteristics() {
 
   wifiConfigSSIDCharacteristic = await wifiConfigService.getCharacteristic(CHR_WIFI_CONFIG_SSID_UUID);
   wifiConfigPskCharacteristic = await wifiConfigService.getCharacteristic(CHR_WIFI_CONFIG_PASSWORD_UUID);
+
+  const wifiAuthService = await server.getPrimaryService(SVC_WIFI_AUTH_UUID);
+  wifiAuthKeyCharacteristic = await wifiAuthService.getCharacteristic(CHR_WIFI_AUTH_KEY_UUID);
+  var hash = sha3_256(DEVICE_ID);
+  console.log(hash);
+  var hash_ab = new Uint8Array(hash.match(/[\da-f]{2}/gi).map(function (value) {
+		return parseInt(value, 16)
+  }))
+  await wifiAuthKeyCharacteristic.writeValue(hash_ab);
 }
 
 
