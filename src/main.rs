@@ -41,7 +41,6 @@ async fn get_adapter() -> Result<(bluer::Adapter, String), String> {
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> bluer::Result<()> {
-
     let opts: Opts = Opts::parse();
 
     let adapter: bluer::Adapter;
@@ -105,11 +104,8 @@ async fn main() -> bluer::Result<()> {
     let mut interval = interval(Duration::from_secs(1));
 
     loop {
-        tokio::select! {
-            _ = interval.tick() => {
-                connect_service.tick().await;
-                authorize_service.clone().lock().await.tick().await;
-            }
-        }
+        interval.tick().await; // blocks for 1s
+        connect_service.tick().await;
+        authorize_service.clone().lock().await.tick().await;
     }
 }
