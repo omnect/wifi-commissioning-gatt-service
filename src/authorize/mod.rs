@@ -5,6 +5,7 @@ use bluer::gatt::local::{
 };
 use enclose::enclose;
 use futures::FutureExt;
+use log::{debug, error, info, warn};
 use sha3::Digest;
 use std::sync::Arc;
 use std::time::Duration;
@@ -41,22 +42,23 @@ async fn write_key(
     new_value: Vec<u8>,
     req: CharacteristicWriteRequest,
 ) -> ReqResult<()> {
-    println!("Key write request {:?} with value {:x?}", &req, &new_value);
+    info!("Key write request {:?}", &req);
+    debug!(" value {:x?}", &new_value);
     let offset = req.offset as usize;
     let len = new_value.len();
     if len + offset > sha3::Sha3_256::output_size() {
-        println!("Key write invalid length.");
+        error!("Key write invalid length.");
         return Err(ReqError::InvalidValueLength.into());
     }
     let mut key = shared.key.lock().await;
     key.splice(offset..offset + len, new_value.iter().cloned());
     let hash = sha3::Sha3_256::digest(shared.device_id.as_bytes());
     if hash.to_vec() == *key {
-        println!("Authorization granted.");
+        info!("Authorization granted.");
         let mut counter = shared.authorized_timeout.lock().await;
         *counter = AUTHORIZE_TIMEOUT;
     } else {
-        println!("Authorization failed.");
+        warn!("Authorization failed.");
         let mut counter = shared.authorized_timeout.lock().await;
         *counter = Duration::from_secs(0);
         // note that if BLE client does not support 32 byte writes, this case
@@ -106,7 +108,7 @@ impl AuthorizeService {
         if !authorized_timeout.is_zero() {
             *authorized_timeout -= Duration::from_secs(1);
             if authorized_timeout.is_zero() {
-                println!("Authorization expired.");
+                info!("Authorization expired.");
                 let mut key = self.shared.key.lock().await;
                 // clear the key
                 *key = vec![0; sha3::Sha3_256::output_size()];

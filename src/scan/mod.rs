@@ -6,6 +6,7 @@ use bluer::gatt::local::{
 };
 use enclose::enclose;
 use futures::FutureExt;
+use log::{debug, error, info};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -75,15 +76,15 @@ async fn read_result(
     req: CharacteristicReadRequest,
 ) -> ReqResult<Vec<u8>> {
     if !shared.authorized.lock().await.is_authorized().await {
-        println!("Scan result read no auth {:?}", &req);
+        error!("Scan result read no auth {:?}", &req);
         return Err(ReqError::NotAuthorized.into());
     }
-    println!("Scan result read request {:?}", &req);
+    info!("Scan result read request {:?}", &req);
     let result_scan_value = shared.result_scan_value.lock().await.clone();
     let offset = req.offset as usize;
     let mtu = req.mtu as usize;
     if offset > result_scan_value.len() {
-        println!("Scan result returning invalid offset");
+        error!("Scan result returning invalid offset");
         return Err(ReqError::InvalidOffset.into());
     }
     let mut size = result_scan_value.len() - offset;
@@ -92,7 +93,7 @@ async fn read_result(
     }
     let slice = &result_scan_value[offset..(offset + size)];
     let vector: Vec<u8> = slice.iter().cloned().collect();
-    println!("Scan result read request returning {:x?}", &vector);
+    debug!("Scan result read request returning {:x?}", &vector);
     Ok(vector)
 }
 
@@ -101,14 +102,12 @@ async fn read_status(
     req: CharacteristicReadRequest,
 ) -> ReqResult<Vec<u8>> {
     if !shared.authorized.lock().await.is_authorized().await {
-        println!("Scan status read no auth {:?}", &req);
+        error!("Scan status read no auth {:?}", &req);
         return Err(ReqError::NotAuthorized.into());
     }
     let status_scan_value = shared.status_scan_value.lock().await.clone();
-    println!(
-        "Scan status read request {:?} with value {:x?}",
-        &req, &status_scan_value
-    );
+    info!("Scan status read request {:?}", &req);
+    debug!(" with value {:x?}", &status_scan_value);
     Ok(status_scan_value)
 }
 
@@ -118,19 +117,17 @@ async fn write_status(
     req: CharacteristicWriteRequest,
 ) -> ReqResult<()> {
     if !shared.authorized.lock().await.is_authorized().await {
-        println!("Scan status write no auth {:?}", &req);
+        error!("Scan status write no auth {:?}", &req);
         return Err(ReqError::NotAuthorized.into());
     }
-    println!(
-        "Scan status write request {:?} with value {:x?}",
-        &req, &new_value
-    );
+    info!("Scan status write request {:?}", &req);
+    debug!(" with value {:x?}", &new_value);
     if new_value.len() > 1 {
-        println!("Scan status write invalid length.");
+        error!("Scan status write invalid length.");
         return Err(ReqError::InvalidValueLength.into());
     }
     if new_value[0] != STATUS_SCAN_IDLE && new_value[0] != STATUS_SCAN_SCAN {
-        println!("Scan status write invalid status, expected either 0 or 1.");
+        error!("Scan status write invalid status, expected either 0 or 1.");
         return Err(ReqError::NotSupported.into());
     }
     let mut status_scan_value = shared.status_scan_value.lock().await;
@@ -151,20 +148,20 @@ async fn write_status(
                     select_scan_value[0] = max_fields as u8;
                     *results_store = json;
                 } else {
-                    println!("Scan failed due to too many results");
+                    error!("Scan failed due to too many results");
                     status_scan_value[0] = STATUS_SCAN_ERROR; // scan failed
                 }
             }
             Err(e) => {
-                println!("Scan failed: {:?}", e);
+                error!("Scan failed: {:?}", e);
                 status_scan_value[0] = STATUS_SCAN_ERROR; // scan failed
             }
         }
         let mut opt = shared.status_scan_notify_opt.lock().await;
         if let Some(writer) = opt.as_mut() {
-            println!("Notifying scan status with value {:x?}", &status_scan_value);
+            info!("Notifying scan status with value {:x?}", &status_scan_value);
             if let Err(err) = writer.notify(status_scan_value.clone()).await {
-                println!("Notification stream error: {}", &err);
+                error!("Notification stream error: {}", &err);
                 *opt = None;
             }
         }
@@ -182,10 +179,10 @@ async fn write_status(
 
 async fn start_notify_status(shared: Arc<ScanSharedData>, notifier: CharacteristicNotifier) {
     if !shared.authorized.lock().await.is_authorized().await {
-        println!("Status scan notify no auth");
+        error!("Status scan notify no auth");
         return;
     }
-    println!(
+    info!(
         "Status scan accepting notify, confirming {}",
         notifier.confirming()
     );
@@ -198,11 +195,11 @@ async fn read_select(
     req: CharacteristicReadRequest,
 ) -> ReqResult<Vec<u8>> {
     if !shared.authorized.lock().await.is_authorized().await {
-        println!("Scan select read no auth {:?}", &req);
+        error!("Scan select read no auth {:?}", &req);
         return Err(ReqError::NotAuthorized.into());
     }
     let select_scan_value = shared.select_scan_value.lock().await.clone();
-    println!(
+    info!(
         "Scan select read request {:?} with value {:x?}",
         &req, &select_scan_value
     );
@@ -215,20 +212,18 @@ async fn write_select(
     req: CharacteristicWriteRequest,
 ) -> ReqResult<()> {
     if !shared.authorized.lock().await.is_authorized().await {
-        println!("Scan select write no auth {:?}", &req);
+        error!("Scan select write no auth {:?}", &req);
         return Err(ReqError::NotAuthorized.into());
     }
-    println!(
-        "Scan select write request {:?} with value {:x?}",
-        &req, &new_value
-    );
+    info!("Scan select write request {:?}", &req);
+    debug!(" with value {:x?}", &new_value);
     if new_value.len() > 1 {
-        println!("Scan select write invalid length.");
+        error!("Scan select write invalid length.");
         return Err(ReqError::InvalidValueLength.into());
     }
     let select_max_records = shared.select_max_records.lock().await;
     if new_value[0] >= *select_max_records {
-        println!(
+        error!(
             "Scan status write invalid index, expected to be < {:x?}.",
             select_max_records
         );
