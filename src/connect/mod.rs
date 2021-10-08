@@ -19,6 +19,8 @@ const STATE_CONNECT_CHAR_UUID: uuid::Uuid =
 const SSID_CONNECT_CHAR_UUID: uuid::Uuid =
     uuid::Uuid::from_u128(0x811ce66622e04a6da50f0c78e076faa4);
 const PSK_CONNECT_CHAR_UUID: uuid::Uuid = uuid::Uuid::from_u128(0x811ce66622e04a6da50f0c78e076faa5);
+const SSID_MAX_LENGTH: usize = 32;
+const PSK_LENGTH: usize = 32;
 
 const STATE_CONNECT_IDLE: u8 = 0u8;
 const STATE_CONNECT_CONNECT: u8 = 1u8;
@@ -51,8 +53,8 @@ impl ConnectSharedData {
     fn new(interf: String, auth: Arc<Mutex<dyn Authorized + Send + Sync>>) -> ConnectSharedData {
         ConnectSharedData {
             state_connect_value: Mutex::new(vec![STATE_CONNECT_IDLE]),
-            ssid_connect_value: Mutex::new(vec![0; 32]),
-            psk_connect_value: Mutex::new(vec![0; 32]),
+            ssid_connect_value: Mutex::new(vec![0; SSID_MAX_LENGTH]),
+            psk_connect_value: Mutex::new(vec![0; PSK_LENGTH]),
             state_connect_notify_opt: Mutex::new(Option::None),
             authorized: auth,
             interface: interf,
@@ -91,7 +93,7 @@ async fn write_state(
     );
     if new_value.len() > 1 {
         println!("Connect state write invalid length.");
-        return Err(ReqError::NotSupported.into());
+        return Err(ReqError::InvalidValueLength.into());
     }
     if new_value[0] != 0 && new_value[0] != 1 {
         println!("Connect state write invalid status, expected either 0 or 1.");
@@ -202,9 +204,9 @@ async fn write_ssid(
     );
     let offset = req.offset as usize;
     let len = new_value.len();
-    if len + offset > 32 {
+    if len + offset > SSID_MAX_LENGTH {
         println!("Connect SSID write invalid length.");
-        return Err(ReqError::NotSupported.into());
+        return Err(ReqError::InvalidValueLength.into());
     }
     let mut ssid_connect_value = shared.ssid_connect_value.lock().await;
     // The SSID field is variable length, and the user might write first a long ssid
@@ -236,9 +238,9 @@ async fn write_psk(
     );
     let offset = req.offset as usize;
     let len = new_value.len();
-    if len + offset > 32 {
+    if len + offset > PSK_LENGTH {
         println!("Connect PSK write invalid length.");
-        return Err(ReqError::NotSupported.into());
+        return Err(ReqError::InvalidValueLength.into());
     }
     let mut psk_connect_value = shared.psk_connect_value.lock().await;
     psk_connect_value.splice(offset..offset + len, new_value.iter().cloned());

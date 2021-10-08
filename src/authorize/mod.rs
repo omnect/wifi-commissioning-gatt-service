@@ -7,6 +7,7 @@ use enclose::enclose;
 use futures::FutureExt;
 use sha3::Digest;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::Mutex;
 
 #[async_trait]
@@ -17,19 +18,19 @@ pub trait Authorized {
 pub const AUTHORIZE_SERVICE_UUID: uuid::Uuid =
     uuid::Uuid::from_u128(0xd69a37ee1d8a4329bd2425db4af3c865);
 const KEY_CHAR_UUID: uuid::Uuid = uuid::Uuid::from_u128(0x811ce66622e04a6da50f0c78e076faa6);
-const AUTHORIZE_COUNT: u16 = 300u16;
+const AUTHORIZE_TIMEOUT: Duration = Duration::from_secs(300);
 
 struct AuthorizeSharedData {
     key: Mutex<Vec<u8>>,
-    authorized_counter: Mutex<u16>,
+    authorized_timeout: Mutex<std::time::Duration>,
     device_id: String,
 }
 
 impl AuthorizeSharedData {
     fn new(id: String) -> AuthorizeSharedData {
         AuthorizeSharedData {
-            key: Mutex::new(vec![0; 32]),
-            authorized_counter: Mutex::new(0u16),
+            key: Mutex::new(vec![0; sha3::Sha3_256::output_size()]),
+            authorized_timeout: Mutex::new(Duration::from_secs(0)),
             device_id: id,
         }
     }
@@ -43,17 +44,24 @@ async fn write_key(
     println!("Key write request {:?} with value {:x?}", &req, &new_value);
     let offset = req.offset as usize;
     let len = new_value.len();
-    if len + offset > 32 {
+    if len + offset > sha3::Sha3_256::output_size() {
         println!("Key write invalid length.");
-        return Err(ReqError::NotSupported.into());
+        return Err(ReqError::InvalidValueLength.into());
     }
     let mut key = shared.key.lock().await;
     key.splice(offset..offset + len, new_value.iter().cloned());
     let hash = sha3::Sha3_256::digest(shared.device_id.as_bytes());
     if hash.to_vec() == *key {
         println!("Authorization granted.");
-        let mut counter = shared.authorized_counter.lock().await;
-        *counter = AUTHORIZE_COUNT;
+        let mut counter = shared.authorized_timeout.lock().await;
+        *counter = AUTHORIZE_TIMEOUT;
+    } else {
+        println!("Authorization failed.");
+        let mut counter = shared.authorized_timeout.lock().await;
+        *counter = Duration::from_secs(0);
+        // note that if BLE client does not support 32 byte writes, this case
+        // will be entered at least once for a partial write, so we must not
+        // reset the key here.
     }
     Ok(())
 }
@@ -81,8 +89,7 @@ impl AuthorizeService {
                     write: true,
                     method: CharacteristicWriteMethod::Fun(Box::new(
                         enclose!( (shared) move|new_value, req| {
-                            let shared = shared.clone();
-                            write_key(shared, new_value, req).boxed()
+                            write_key(shared.clone(), new_value, req).boxed()
                         }),
                     )),
                     ..Default::default()
@@ -95,12 +102,14 @@ impl AuthorizeService {
         }
     }
     pub async fn tick(&mut self) {
-        let shared = self.shared.clone();
-        let mut authorized_counter = shared.authorized_counter.lock().await;
-        if *authorized_counter != 0 {
-            *authorized_counter -= 1;
-            if *authorized_counter == 0 {
+        let mut authorized_timeout = self.shared.authorized_timeout.lock().await;
+        if !authorized_timeout.is_zero() {
+            *authorized_timeout -= Duration::from_secs(1);
+            if authorized_timeout.is_zero() {
                 println!("Authorization expired.");
+                let mut key = self.shared.key.lock().await;
+                // clear the key
+                *key = vec![0; sha3::Sha3_256::output_size()];
             }
         }
     }
@@ -109,6 +118,7 @@ impl AuthorizeService {
 #[async_trait]
 impl Authorized for AuthorizeService {
     async fn is_authorized(&self) -> bool {
-        return *self.shared.clone().authorized_counter.lock().await != 0;
+        let authorized_timeout = self.shared.authorized_timeout.lock().await;
+        return !authorized_timeout.is_zero();
     }
 }

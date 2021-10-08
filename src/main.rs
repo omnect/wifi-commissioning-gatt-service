@@ -22,6 +22,7 @@ struct Opts {
 }
 
 const MANUFACTURER_ID: u16 = 0xc6c6;
+const MANUFACTURER_ID_VAL: [u8; 4] = [0x21, 0x22, 0x23, 0x24];
 
 async fn get_adapter() -> Result<(bluer::Adapter, String), String> {
     let session = bluer::Session::new().await.map_err(|e| e.to_string())?;
@@ -40,15 +41,13 @@ async fn get_adapter() -> Result<(bluer::Adapter, String), String> {
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> bluer::Result<()> {
-    env_logger::init();
 
     let opts: Opts = Opts::parse();
 
     let adapter: bluer::Adapter;
     let adapter_name: String;
     loop {
-        let adapter_and_name = get_adapter().await;
-        match adapter_and_name {
+        match get_adapter().await {
             Ok((a, n)) => {
                 adapter = a;
                 adapter_name = n.to_string();
@@ -68,7 +67,7 @@ async fn main() -> bluer::Result<()> {
         adapter.address().await?
     );
     let mut manufacturer_data = BTreeMap::new();
-    manufacturer_data.insert(MANUFACTURER_ID, vec![0x21, 0x22, 0x23, 0x24]);
+    manufacturer_data.insert(MANUFACTURER_ID, MANUFACTURER_ID_VAL.to_vec());
     let le_advertisement = Advertisement {
         advertisement_type: bluer::adv::Type::Peripheral,
         service_uuids: vec![scan::SCAN_SERVICE_UUID].into_iter().collect(),

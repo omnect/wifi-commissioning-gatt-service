@@ -127,7 +127,7 @@ async fn write_status(
     );
     if new_value.len() > 1 {
         println!("Scan status write invalid length.");
-        return Err(ReqError::NotSupported.into());
+        return Err(ReqError::InvalidValueLength.into());
     }
     if new_value[0] != STATUS_SCAN_IDLE && new_value[0] != STATUS_SCAN_SCAN {
         println!("Scan status write invalid status, expected either 0 or 1.");
@@ -224,7 +224,7 @@ async fn write_select(
     );
     if new_value.len() > 1 {
         println!("Scan select write invalid length.");
-        return Err(ReqError::NotSupported.into());
+        return Err(ReqError::InvalidValueLength.into());
     }
     let select_max_records = shared.select_max_records.lock().await;
     if new_value[0] >= *select_max_records {

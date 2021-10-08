@@ -84,7 +84,6 @@ fn parse_aps(aps: &str) -> String {
 
 pub async fn scan(interface: String) -> Result<Vec<u8>, String> {
     let scan_task = tokio::task::spawn_blocking(move || {
-        let interface = interface.clone();
         println!("Starting SSID scan");
         let mut wpa = wpactrl::WpaCtrl::new()
             .ctrl_path(format!("/var/run/wpa_supplicant/{}", interface))
