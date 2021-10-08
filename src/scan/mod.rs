@@ -9,6 +9,7 @@ use futures::FutureExt;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+use crate::authorize;
 pub mod scan;
 
 const RESULT_FIELD_LENGTH: usize = 100;
@@ -50,10 +51,12 @@ struct ScanSharedData {
     select_scan_value: Mutex<Vec<u8>>,
     // Notifier instance for status_scan_value. Only one notification client is supported.
     status_scan_notify_opt: Mutex<Option<CharacteristicNotifier>>,
+    authorized: Arc<Mutex<dyn Authorized + Send + Sync>>,
+    interface: String,
 }
 
 impl ScanSharedData {
-    fn new() -> ScanSharedData {
+    fn new(interf: String, auth: Arc<Mutex<dyn Authorized + Send + Sync>>) -> ScanSharedData {
         ScanSharedData {
             status_scan_value: Mutex::new(vec![STATUS_SCAN_IDLE]),
             result_scan_value: Mutex::new(vec![0; RESULT_FIELD_LENGTH]),
@@ -61,6 +64,8 @@ impl ScanSharedData {
             select_max_records: Mutex::new(0u8),
             select_scan_value: Mutex::new(vec![0x00]),
             status_scan_notify_opt: Mutex::new(Option::None),
+            authorized: auth,
+            interface: interf,
         }
     }
 }
@@ -69,8 +74,12 @@ async fn read_result(
     shared: Arc<ScanSharedData>,
     req: CharacteristicReadRequest,
 ) -> ReqResult<Vec<u8>> {
-    let result_scan_value = shared.result_scan_value.lock().await.clone();
+    if !shared.authorized.lock().await.is_authorized().await {
+        println!("Scan result read no auth {:?}", &req);
+        return Err(ReqError::NotAuthorized.into());
+    }
     println!("Scan result read request {:?}", &req);
+    let result_scan_value = shared.result_scan_value.lock().await.clone();
     let offset = req.offset as usize;
     let mtu = req.mtu as usize;
     if offset > result_scan_value.len() {
@@ -91,6 +100,10 @@ async fn read_status(
     shared: Arc<ScanSharedData>,
     req: CharacteristicReadRequest,
 ) -> ReqResult<Vec<u8>> {
+    if !shared.authorized.lock().await.is_authorized().await {
+        println!("Scan status read no auth {:?}", &req);
+        return Err(ReqError::NotAuthorized.into());
+    }
     let status_scan_value = shared.status_scan_value.lock().await.clone();
     println!(
         "Scan status read request {:?} with value {:x?}",
@@ -104,13 +117,17 @@ async fn write_status(
     new_value: Vec<u8>,
     req: CharacteristicWriteRequest,
 ) -> ReqResult<()> {
+    if !shared.authorized.lock().await.is_authorized().await {
+        println!("Scan status write no auth {:?}", &req);
+        return Err(ReqError::NotAuthorized.into());
+    }
     println!(
         "Scan status write request {:?} with value {:x?}",
         &req, &new_value
     );
     if new_value.len() > 1 {
         println!("Scan status write invalid length.");
-        return Err(ReqError::NotSupported.into());
+        return Err(ReqError::InvalidValueLength.into());
     }
     if new_value[0] != STATUS_SCAN_IDLE && new_value[0] != STATUS_SCAN_SCAN {
         println!("Scan status write invalid status, expected either 0 or 1.");
@@ -121,7 +138,7 @@ async fn write_status(
     status_scan_value[0] = new_value[0];
     // 0 -> 1: Start scan
     if new_value[0] == STATUS_SCAN_SCAN && old == STATUS_SCAN_IDLE {
-        let scan_task_result = scan::scan().await;
+        let scan_task_result = scan::scan(shared.interface.clone()).await;
         let mut results_store = shared.results.lock().await;
         let mut select_max_records = shared.select_max_records.lock().await;
         let mut select_scan_value = shared.select_scan_value.lock().await;
@@ -164,6 +181,10 @@ async fn write_status(
 }
 
 async fn start_notify_status(shared: Arc<ScanSharedData>, notifier: CharacteristicNotifier) {
+    if !shared.authorized.lock().await.is_authorized().await {
+        println!("Status scan notify no auth");
+        return;
+    }
     println!(
         "Status scan accepting notify, confirming {}",
         notifier.confirming()
@@ -176,6 +197,10 @@ async fn read_select(
     shared: Arc<ScanSharedData>,
     req: CharacteristicReadRequest,
 ) -> ReqResult<Vec<u8>> {
+    if !shared.authorized.lock().await.is_authorized().await {
+        println!("Scan select read no auth {:?}", &req);
+        return Err(ReqError::NotAuthorized.into());
+    }
     let select_scan_value = shared.select_scan_value.lock().await.clone();
     println!(
         "Scan select read request {:?} with value {:x?}",
@@ -189,13 +214,17 @@ async fn write_select(
     new_value: Vec<u8>,
     req: CharacteristicWriteRequest,
 ) -> ReqResult<()> {
+    if !shared.authorized.lock().await.is_authorized().await {
+        println!("Scan select write no auth {:?}", &req);
+        return Err(ReqError::NotAuthorized.into());
+    }
     println!(
         "Scan select write request {:?} with value {:x?}",
         &req, &new_value
     );
     if new_value.len() > 1 {
         println!("Scan select write invalid length.");
-        return Err(ReqError::NotSupported.into());
+        return Err(ReqError::InvalidValueLength.into());
     }
     let select_max_records = shared.select_max_records.lock().await;
     if new_value[0] >= *select_max_records {
@@ -219,15 +248,16 @@ async fn write_select(
     *select_scan_value = new_value;
     Ok(())
 }
+use authorize::Authorized;
 
 pub struct ScanService {
     shared: Arc<ScanSharedData>,
 }
 
 impl ScanService {
-    pub fn new() -> ScanService {
+    pub fn new(interface: String, auth: Arc<Mutex<dyn Authorized + Send + Sync>>) -> ScanService {
         ScanService {
-            shared: Arc::new(ScanSharedData::new()),
+            shared: Arc::new(ScanSharedData::new(interface, auth)),
         }
     }
     pub fn service_entry(&mut self) -> Service {

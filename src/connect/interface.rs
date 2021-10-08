@@ -1,6 +1,6 @@
-pub async fn connect(ssid: Vec<u8>, psk: Vec<u8>) -> Result<(), String> {
+pub async fn connect(interface: String, ssid: Vec<u8>, psk: Vec<u8>) -> Result<(), String> {
     let mut wpa = wpactrl::WpaCtrl::new()
-        .ctrl_path("/var/run/wpa_supplicant/wlan0")
+        .ctrl_path(format!("/var/run/wpa_supplicant/{}", interface))
         .open()
         .map_err(|e| e.to_string())?;
 
@@ -67,9 +67,9 @@ pub async fn connect(ssid: Vec<u8>, psk: Vec<u8>) -> Result<(), String> {
     Ok(())
 }
 
-pub async fn disconnect() -> Result<(), String> {
+pub async fn disconnect(interface: String) -> Result<(), String> {
     let mut wpa = wpactrl::WpaCtrl::new()
-        .ctrl_path("/var/run/wpa_supplicant/wlan0")
+        .ctrl_path(format!("/var/run/wpa_supplicant/{}", interface))
         .open()
         .map_err(|e| e.to_string())?;
     let output = wpa.request("DISCONNECT").map_err(|e| e.to_string())?;
@@ -79,9 +79,9 @@ pub async fn disconnect() -> Result<(), String> {
     Ok(())
 }
 
-pub async fn status() -> Result<(u8, String), String> {
+pub async fn status(interface: String) -> Result<(u8, String), String> {
     let mut wpa = wpactrl::WpaCtrl::new()
-        .ctrl_path("/var/run/wpa_supplicant/wlan0")
+        .ctrl_path(format!("/var/run/wpa_supplicant/{}", interface))
         .open()
         .map_err(|e| e.to_string())?;
     let output = wpa.request("STATUS").map_err(|e| e.to_string())?;
