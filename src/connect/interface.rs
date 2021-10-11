@@ -1,3 +1,5 @@
+use log::warn;
+
 pub async fn connect(interface: String, ssid: Vec<u8>, psk: Vec<u8>) -> Result<(), String> {
     let mut wpa = wpactrl::WpaCtrl::new()
         .ctrl_path(format!("/var/run/wpa_supplicant/{}", interface))
@@ -11,9 +13,7 @@ pub async fn connect(interface: String, ssid: Vec<u8>, psk: Vec<u8>) -> Result<(
 
     let remove_network_response = wpa.request("REMOVE_NETWORK 0").map_err(|e| e.to_string())?;
     if remove_network_response.trim() == "FAIL" {
-        println!(
-            "REMOVE_NETWORK 0 failed, but this is ok if there was no network in config before."
-        );
+        warn!("REMOVE_NETWORK 0 failed, but this is ok if there was no network in config before.");
     }
 
     let add_network_response = wpa.request("ADD_NETWORK").map_err(|e| e.to_string())?;

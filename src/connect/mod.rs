@@ -7,6 +7,7 @@ use bluer::gatt::local::{
 };
 use enclose::enclose;
 use futures::FutureExt;
+use log::{debug, error, info};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -67,14 +68,12 @@ async fn read_state(
     req: CharacteristicReadRequest,
 ) -> ReqResult<Vec<u8>> {
     if !shared.authorized.lock().await.is_authorized().await {
-        println!("Connect state read no auth {:?}", &req);
+        error!("Connect state read no auth {:?}", &req);
         return Err(ReqError::NotAuthorized.into());
     }
     let state_connect_value = shared.state_connect_value.lock().await.clone();
-    println!(
-        "Connect state read request {:?} with value {:x?}",
-        &req, &state_connect_value
-    );
+    info!("Connect state read request {:?}", &req);
+    debug!(" with value {:x?}", &state_connect_value);
     Ok(state_connect_value)
 }
 
@@ -84,19 +83,17 @@ async fn write_state(
     req: CharacteristicWriteRequest,
 ) -> ReqResult<()> {
     if !shared.authorized.lock().await.is_authorized().await {
-        println!("Connect state write no auth {:?}", &req);
+        error!("Connect state write no auth {:?}", &req);
         return Err(ReqError::NotAuthorized.into());
     }
-    println!(
-        "Connect state write request {:?} with value {:x?}",
-        &req, &new_value
-    );
+    info!("Connect state write request {:?}", &req);
+    debug!(" with value {:x?}", &new_value);
     if new_value.len() > 1 {
-        println!("Connect state write invalid length.");
+        error!("Connect state write invalid length.");
         return Err(ReqError::InvalidValueLength.into());
     }
     if new_value[0] != 0 && new_value[0] != 1 {
-        println!("Connect state write invalid status, expected either 0 or 1.");
+        error!("Connect state write invalid status, expected either 0 or 1.");
         return Err(ReqError::NotSupported.into());
     }
     let mut state_connect_value = shared.state_connect_value.lock().await;
@@ -114,12 +111,12 @@ async fn write_state(
         .await;
         match result {
             Err(e) => {
-                println!("Connect failed: {:?}", e);
+                error!("Connect failed: {:?}", e);
                 state_connect_value[0] = STATE_CONNECT_FAILED;
                 return Err(ReqError::Failed.into());
             }
             Ok(_o) => {
-                println!("Connect successful, waiting for ip");
+                info!("Connect successful, waiting for ip");
             }
         }
     } else if new_value[0] == STATE_CONNECT_IDLE && old != STATE_CONNECT_IDLE {
@@ -127,24 +124,24 @@ async fn write_state(
         let result = interface::disconnect(shared.interface.clone()).await;
         match result {
             Err(e) => {
-                println!("Disconnect failed: {:?}", e);
+                error!("Disconnect failed: {:?}", e);
                 state_connect_value[0] = STATE_CONNECT_FAILED;
                 return Err(ReqError::Failed.into());
             }
             Ok(_o) => {
-                println!("Disconnect successful");
+                info!("Disconnect successful");
             }
         }
     }
 
     let mut opt = shared.state_connect_notify_opt.lock().await;
     if let Some(writer) = opt.as_mut() {
-        println!(
+        info!(
             "Notifying connect state with value {:x?}",
             &state_connect_value
         );
         if let Err(err) = writer.notify(state_connect_value.clone()).await {
-            println!("Notification stream error: {}", &err);
+            error!("Notification stream error: {}", &err);
             *opt = None;
         }
     }
@@ -152,7 +149,7 @@ async fn write_state(
 }
 
 async fn start_notify_state(shared: Arc<ConnectSharedData>, notifier: CharacteristicNotifier) {
-    println!(
+    info!(
         "State connect accepting notify, confirming {}",
         notifier.confirming()
     );
@@ -165,18 +162,16 @@ async fn read_ssid(
     req: CharacteristicReadRequest,
 ) -> ReqResult<Vec<u8>> {
     if !shared.authorized.lock().await.is_authorized().await {
-        println!("Connect SSID read no auth {:?}", &req);
+        error!("Connect SSID read no auth {:?}", &req);
         return Err(ReqError::NotAuthorized.into());
     }
     let ssid_connect_value = shared.ssid_connect_value.lock().await.clone();
-    println!(
-        "Connect SSID read request {:?} with value {:x?}",
-        &req, &ssid_connect_value
-    );
+    info!("Connect SSID read request {:?}", &req);
+    debug!(" with value {:x?}", &ssid_connect_value);
     let offset = req.offset as usize;
     let mtu = req.mtu as usize;
     if offset > ssid_connect_value.len() {
-        println!("Connect SSID returning invalid offset");
+        error!("Connect SSID returning invalid offset");
         return Err(ReqError::InvalidOffset.into());
     }
     let mut size = ssid_connect_value.len() - offset;
@@ -185,7 +180,7 @@ async fn read_ssid(
     }
     let slice = &ssid_connect_value[offset..(offset + size)];
     let vector: Vec<u8> = slice.iter().cloned().collect();
-    println!("Connect SSID read request returning {:x?}", &vector);
+    debug!("Connect SSID read request returning {:x?}", &vector);
     Ok(vector)
 }
 
@@ -195,17 +190,15 @@ async fn write_ssid(
     req: CharacteristicWriteRequest,
 ) -> ReqResult<()> {
     if !shared.authorized.lock().await.is_authorized().await {
-        println!("Connect SSID write no auth {:?}", &req);
+        error!("Connect SSID write no auth {:?}", &req);
         return Err(ReqError::NotAuthorized.into());
     }
-    println!(
-        "Connect SSID write request {:?} with value {:x?}",
-        &req, &new_value
-    );
+    info!("Connect SSID write request {:?}", &req);
+    debug!(" with value {:x?}", &new_value);
     let offset = req.offset as usize;
     let len = new_value.len();
     if len + offset > SSID_MAX_LENGTH {
-        println!("Connect SSID write invalid length.");
+        error!("Connect SSID write invalid length.");
         return Err(ReqError::InvalidValueLength.into());
     }
     let mut ssid_connect_value = shared.ssid_connect_value.lock().await;
@@ -229,17 +222,15 @@ async fn write_psk(
     req: CharacteristicWriteRequest,
 ) -> ReqResult<()> {
     if !shared.authorized.lock().await.is_authorized().await {
-        println!("Connect PSK write no auth {:?}", &req);
+        error!("Connect PSK write no auth {:?}", &req);
         return Err(ReqError::NotAuthorized.into());
     }
-    println!(
-        "Connect PSK write request {:?} with value {:x?}",
-        &req, &new_value
-    );
+    info!("Connect PSK write request {:?}", &req);
+    debug!(" with value {:x?}", &new_value);
     let offset = req.offset as usize;
     let len = new_value.len();
     if len + offset > PSK_LENGTH {
-        println!("Connect PSK write invalid length.");
+        error!("Connect PSK write invalid length.");
         return Err(ReqError::InvalidValueLength.into());
     }
     let mut psk_connect_value = shared.psk_connect_value.lock().await;
@@ -355,13 +346,13 @@ impl ConnectService {
             let result = interface::status(self.shared.interface.clone()).await;
             match result {
                 Err(e) => {
-                    println!("Status failed: {:?}", e);
+                    error!("Status failed: {:?}", e);
                     state_connect_value[0] = STATE_CONNECT_FAILED;
                     notify = true;
                 }
                 Ok((status, ip)) => {
                     if status == 1u8 && ip != "<unknown>" {
-                        println!("Connected with ip {:?}", ip);
+                        info!("Connected with ip {:?}", ip);
                         state_connect_value[0] = STATE_CONNECT_CONNECTED;
                         notify = true
                     }
@@ -371,12 +362,12 @@ impl ConnectService {
         if notify {
             let mut opt = self.shared.state_connect_notify_opt.lock().await;
             if let Some(writer) = opt.as_mut() {
-                println!(
+                info!(
                     "Notifying connect state with value {:x?}",
                     &state_connect_value
                 );
                 if let Err(err) = writer.notify(state_connect_value.clone()).await {
-                    println!("Notification stream error: {}", &err);
+                    error!("Notification stream error: {}", &err);
                     *opt = None;
                 }
             }

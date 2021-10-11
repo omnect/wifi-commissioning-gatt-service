@@ -1000,6 +1000,7 @@ dependencies = [
  "enclose",
  "env_logger",
  "futures",
+ "log",
  "regex",
  "sha3",
  "tokio",

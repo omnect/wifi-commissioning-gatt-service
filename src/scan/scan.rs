@@ -1,3 +1,5 @@
+use log::{debug, error, info};
+
 fn unescape_hex(ssid: &str) -> Vec<u8> {
     let re = regex::bytes::Regex::new(r"\\(\\|(x([0-9a-fA-F]{2})))").unwrap();
     let out = re.replace_all(&ssid.as_bytes(), |caps: &regex::bytes::Captures| {
@@ -17,7 +19,7 @@ fn escape_invalid_unicode(bytestring: Vec<u8>) -> String {
         let s = std::str::from_utf8(&bytes);
         match s {
             Err(e) => {
-                println!("Decoding {:?} failed: {}", bytes, e.to_string());
+                error!("Decoding {:?} failed: {}", bytes, e.to_string());
                 let (good, bad) = bytes.split_at(e.valid_up_to());
                 if good.len() > 0 {
                     escaped += std::str::from_utf8(&good).unwrap(); // this cannot fail
@@ -84,7 +86,7 @@ fn parse_aps(aps: &str) -> String {
 
 pub async fn scan(interface: String) -> Result<Vec<u8>, String> {
     let scan_task = tokio::task::spawn_blocking(move || {
-        println!("Starting SSID scan");
+        info!("Starting SSID scan");
         let mut wpa = wpactrl::WpaCtrl::new()
             .ctrl_path(format!("/var/run/wpa_supplicant/{}", interface))
             .open()
@@ -98,14 +100,14 @@ pub async fn scan(interface: String) -> Result<Vec<u8>, String> {
         if output.trim() == "FAIL" {
             return Err("SCAN_RESULTS failed.".to_string());
         }
-        println!("Finished SSID scan");
+        info!("Finished SSID scan");
         Ok(output)
     });
     let scan_task_result = scan_task.await.map_err(|e| e.to_string())?;
     match scan_task_result {
         Ok(found_hotspots) => {
             let json = parse_aps(&found_hotspots);
-            println!("Scan successful: {:?}", json);
+            debug!("Scan successful: {:?}", json);
             return Ok(json.as_bytes().to_vec());
         }
         Err(e) => {

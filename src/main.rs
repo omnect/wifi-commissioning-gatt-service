@@ -6,6 +6,7 @@ use authorize::AuthorizeService;
 use bluer::{adv::Advertisement, gatt::local::Application};
 use clap::{AppSettings, Clap};
 use connect::ConnectService;
+use log::{debug, info};
 use scan::ScanService;
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
 use tokio::sync::Mutex;
@@ -26,9 +27,9 @@ const MANUFACTURER_ID_VAL: [u8; 4] = [0x21, 0x22, 0x23, 0x24];
 
 async fn get_adapter() -> Result<(bluer::Adapter, String), String> {
     let session = bluer::Session::new().await.map_err(|e| e.to_string())?;
-    println!("got session");
+    debug!("got session");
     let adapter_names = session.adapter_names().await.map_err(|e| e.to_string())?;
-    println!("got adapter");
+    debug!("got adapter");
     let adapter_name = adapter_names.first();
     match adapter_name {
         Some(s) => Ok((
@@ -41,6 +42,8 @@ async fn get_adapter() -> Result<(bluer::Adapter, String), String> {
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> bluer::Result<()> {
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+
     let opts: Opts = Opts::parse();
 
     let adapter: bluer::Adapter;
@@ -60,7 +63,7 @@ async fn main() -> bluer::Result<()> {
     }
     adapter.set_powered(true).await?;
 
-    println!(
+    info!(
         "Advertising on Bluetooth adapter {} with address {}",
         &adapter_name,
         adapter.address().await?
@@ -77,12 +80,12 @@ async fn main() -> bluer::Result<()> {
     };
     let _adv_handle = adapter.advertise(le_advertisement).await?;
 
-    println!(
+    debug!(
         "Adv instances {}",
         adapter.active_advertising_instances().await?
     );
 
-    println!(
+    info!(
         "Serving GATT service on Bluetooth adapter {}",
         &adapter_name
     );
