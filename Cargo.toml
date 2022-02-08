@@ -1,9 +1,10 @@
 [package]
 name = "wifi-commissioning-gatt-service"
-version = "0.1.4"
+version = "0.1.5"
 authors = ["Roland Erk <roland.erk@conplement.de>"]
 edition = "2018"
 repository = "git@github.com:ICS-DeviceManagement/wifi-commissioning-gatt-service.git"
+license = "MIT OR Apache-2.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
