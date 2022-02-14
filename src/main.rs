@@ -13,7 +13,7 @@ use tokio::sync::Mutex;
 use tokio::time::interval;
 
 #[derive(Clap)]
-#[clap(version = "0.1.4", author = "Roland Erk <roland.erk@conplement.de")]
+#[clap(version, author)]
 #[clap(setting = AppSettings::ColoredHelp)]
 struct Opts {
     #[clap(short, long, default_value = "wlan0")]
@@ -105,6 +105,11 @@ async fn main() -> bluer::Result<()> {
     let _app_handle = adapter.serve_gatt_application(app).await?;
 
     let mut interval = interval(Duration::from_secs(1));
+
+    #[cfg(feature = "systemd")]
+    {
+        sd_notify::notify(true, &[sd_notify::NotifyState::Ready])?;
+    }
 
     loop {
         interval.tick().await; // blocks for 1s
