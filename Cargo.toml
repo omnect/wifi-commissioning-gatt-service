@@ -1,6 +1,6 @@
 [package]
 name = "wifi-commissioning-gatt-service"
-version = "0.1.5"
+version = "0.2.0"
 authors = ["Roland Erk <roland.erk@conplement.de>"]
 edition = "2018"
 repository = "git@github.com:ICS-DeviceManagement/wifi-commissioning-gatt-service.git"
@@ -21,7 +21,12 @@ regex = "1"
 async-trait = "0.1.*"
 clap = "3.0.0-beta.4"
 sha3 = "0.9.*"
+sd-notify = { version = "0.3.*", optional = true }
 
 [build-dependencies]
 
 [dev-dependencies]
+
+[features]
+default = ["systemd"]
+systemd = ["sd-notify"]
