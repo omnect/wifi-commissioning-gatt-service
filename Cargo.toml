@@ -28,4 +28,5 @@ sd-notify = { version = "0.3.*", optional = true }
 [dev-dependencies]
 
 [features]
+default = ["systemd"]
 systemd = ["sd-notify"]
