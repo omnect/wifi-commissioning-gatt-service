@@ -1,6 +1,6 @@
 [package]
 name = "wifi-commissioning-gatt-service"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Roland Erk <roland.erk@conplement.de>"]
 edition = "2018"
 repository = "git@github.com:ICS-DeviceManagement/wifi-commissioning-gatt-service.git"
