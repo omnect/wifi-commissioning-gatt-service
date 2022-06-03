@@ -1,13 +1,19 @@
 # wifi-commissioning-gatt-service
 
 This service is intended to run on a device that is delivered to an end-user without a preset configuration for its wifi settings.
-It allows a bluetooth client (like a Chrome browser running an a PC or smartphone) to make the appropriate settings
+It allows a bluetooth client (like a Chrome browser running on a PC or smartphone) to make the appropriate settings
 to connect the device to an existing wlan access point.
 
 ## `systemd` integration
 
 The crate `wifi-commissioning-gatt-service` has the optional feature `systemd`.<br>
 If you enable `systemd` it [notifies](https://www.freedesktop.org/software/systemd/man/sd_notify.html#READY=1) `systemd` that the startup is finished.<br>
+
+## Test
+
+There is the web based bluetooth client `client/web_ble.html`, which can be used to configure the wifi of the device using bluetooth.
+The web browser has to support the bluetooth API; e.g., the Chrome browser.
+The `DEVICE_ID` variable in `client/web_ble.js` has to be set to the device ID of the device, in order to authorize the bluetooth connection.
 
 ## License
 
