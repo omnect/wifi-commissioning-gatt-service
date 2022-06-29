@@ -4,7 +4,7 @@ pub mod scan;
 
 use authorize::AuthorizeService;
 use bluer::{adv::Advertisement, gatt::local::Application};
-use clap::{AppSettings, Clap};
+use clap::{AppSettings,Parser};
 use connect::ConnectService;
 use log::{debug, info};
 use scan::ScanService;
@@ -12,7 +12,7 @@ use std::{collections::BTreeMap, sync::Arc, time::Duration};
 use tokio::sync::Mutex;
 use tokio::time::interval;
 
-#[derive(Clap)]
+#[derive(Parser)]
 #[clap(version, author)]
 #[clap(setting = AppSettings::ColoredHelp)]
 struct Opts {
@@ -101,6 +101,7 @@ async fn main() -> bluer::Result<()> {
             connect_service.service_entry(),
             authorize_service.clone().lock().await.service_entry(),
         ],
+        _non_exhaustive: (),
     };
     let _app_handle = adapter.serve_gatt_application(app).await?;
 
