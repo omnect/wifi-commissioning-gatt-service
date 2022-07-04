@@ -4,7 +4,7 @@ pub mod scan;
 
 use authorize::AuthorizeService;
 use bluer::{adv::Advertisement, gatt::local::Application};
-use clap::{AppSettings,Parser};
+use clap::{AppSettings, Parser};
 use connect::ConnectService;
 use log::{debug, info};
 use scan::ScanService;
