@@ -1,6 +1,6 @@
 [package]
 name = "wifi-commissioning-gatt-service"
-version = "0.2.2"
+version = "0.2.3"
 authors = ["Roland Erk <roland.erk@conplement.de>"]
 edition = "2018"
 repository = "git@github.com:ICS-DeviceManagement/wifi-commissioning-gatt-service.git"
@@ -9,19 +9,22 @@ license = "MIT OR Apache-2.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-bluer = "0.10"
-futures = "0.3"
-tokio = { version = "1.17.*", features = ["io-std", "io-util", "rt-multi-thread", "process"] }
-uuid = "0.8"
-log = "0.4.*"
+async-trait = "0.1"
+bluer = { version = "0.15", features = ["bluetoothd"] }
+clap = { version = "3.2", features = ["derive"] }
+enclose = "1.1"
 env_logger = "0.8"
-wpactrl = "0.4.*"
-enclose = "1.1.8"
-regex = "1.5.5"
-async-trait = "0.1.*"
-clap = "3.0.0-beta.4"
-sha3 = "0.9.*"
-sd-notify = { version = "0.3.*", optional = true }
+futures = "0.3"
+log = "0.4"
+regex = "1.5"
+sd-notify = { version = "0.4", optional = true }
+sha3 = "0.9"
+tokio = { version = "1.19", features = ["io-std", "io-util", "rt-multi-thread", "process"] }
+uuid = "1.1"
+wpactrl = "0.4"
+
+
+
 
 [build-dependencies]
 
