@@ -9,6 +9,9 @@ to connect the device to an existing wlan access point.
 The crate `wifi-commissioning-gatt-service` has the optional feature `systemd`.<br>
 If you enable `systemd` it [notifies](https://www.freedesktop.org/software/systemd/man/sd_notify.html#READY=1) `systemd` that the startup is finished.<br>
 
+The systemd service file `systemd/wifi-commissioning-gatt@.service` is using the script `ics_dm_get_deviceid.sh` (see *-d* option), in order to supply the device ID.
+In the case the service is not used in combination with the *meta-ics-dm* layer, it has to be adapted accordingly.
+
 ## Test
 
 There is the web based bluetooth client `client/web_ble.html`, which can be used to configure the wifi of the device using bluetooth.
