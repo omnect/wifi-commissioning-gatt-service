@@ -4,6 +4,13 @@ This service is intended to run on a device that is delivered to an end-user wit
 It allows a bluetooth client (like a Chrome browser running on a PC or smartphone) to make the appropriate settings
 to connect the device to an existing wlan access point.
 
+## Usage
+This service uses the following command line options:
+- -i, --interface \<INTERFACE-NAME\>
+    - (wireless) network interface name [optional, default: *wlan0*]
+- -d, --device-id \<DEVICE-ID\>
+    - device ID of the device [mandatory]
+
 ## `systemd` integration
 
 The crate `wifi-commissioning-gatt-service` has the optional feature `systemd`.<br>
