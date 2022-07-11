@@ -5,8 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.4] Q3 2022
+## [0.2.5] Q3 2022
 - moved systemd service file from meta-ics-dm
+
+## [0.2.4] Q3 2022
+- fixed 32bit builds by updating `wpactrl` to 0.5.*
+- updated all dependencies via `cargo update`
 
 ## [0.2.3] Q3 2022
 - updated dependencies (especially bluer)
