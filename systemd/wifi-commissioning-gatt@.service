@@ -11,7 +11,7 @@ RestartSec=5
 User=nobody
 Group=wpa_supplicant
 
-ExecStart=/bin/bash -c '/usr/bin/wifi-commissioning-gatt-service -i %i -d $(/usr/bin/ics_dm_get_deviceid.sh)'
+ExecStart=/bin/bash -c '/usr/bin/wifi-commissioning-gatt-service -i %i -b $(/usr/bin/ics_dm_get_deviceid.sh)'
 
 [Install]
 WantedBy=multi-user.target

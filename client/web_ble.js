@@ -34,7 +34,7 @@ const WIFI_CONFIG_STATE_CONNECT   = 1;
 const WIFI_CONFIG_STATE_JOINED    = 2;
 const WIFI_CONFIG_STATE_ERROR     = 3;
 
-const DEVICE_ID = 'some-random-id';
+const BLE_SECTET = 'some-random-id';
 
 // Global Variables
 var bluetoothDevice;
@@ -103,7 +103,7 @@ async function connectDeviceAndCacheCharacteristics() {
 
   const wifiAuthService = await server.getPrimaryService(SVC_WIFI_AUTH_UUID);
   wifiAuthKeyCharacteristic = await wifiAuthService.getCharacteristic(CHR_WIFI_AUTH_KEY_UUID);
-  var hash = sha3_256(DEVICE_ID);
+  var hash = sha3_256(BLE_SECTET);
   console.log(hash);
   var hash_ab = new Uint8Array(hash.match(/[\da-f]{2}/gi).map(function (value) {
 		return parseInt(value, 16)

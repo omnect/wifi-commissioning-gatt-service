@@ -6,10 +6,10 @@ to connect the device to an existing wlan access point.
 
 ## Usage
 This service uses the following command line options:
-- -i, --interface \<INTERFACE-NAME\>
+- -b, --ble-secret \<BLE_SECRET\>
+    - secret shared between client and server used for BLE communication
+- -i, --interface \<INTERFACE\>
     - (wireless) network interface name [optional, default: *wlan0*]
-- -d, --device-id \<DEVICE-ID\>
-    - device ID of the device [mandatory]
 
 ## `systemd` integration
 
@@ -23,7 +23,7 @@ In the case the service is not used in combination with the *meta-ics-dm* layer,
 
 There is the web based bluetooth client `client/web_ble.html`, which can be used to configure the wifi of the device using bluetooth.
 The web browser has to support the bluetooth API; e.g., the Chrome browser.
-The `DEVICE_ID` variable in `client/web_ble.js` has to be set to the device ID of the device, in order to authorize the bluetooth connection.
+The `BLE_SECTET` variable in `client/web_ble.js` has to be set to the shared secret, in order to authorize the bluetooth connection.
 
 ## License
 
