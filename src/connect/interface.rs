@@ -1,7 +1,7 @@
 use log::warn;
 
 pub async fn connect(interface: String, ssid: Vec<u8>, psk: Vec<u8>) -> Result<(), String> {
-    let mut wpa = wpactrl::WpaCtrl::builder()
+    let mut wpa = wpactrl::Client::builder()
         .ctrl_path(format!("/var/run/wpa_supplicant/{}", interface))
         .open()
         .map_err(|e| e.to_string())?;
@@ -68,7 +68,7 @@ pub async fn connect(interface: String, ssid: Vec<u8>, psk: Vec<u8>) -> Result<(
 }
 
 pub async fn disconnect(interface: String) -> Result<(), String> {
-    let mut wpa = wpactrl::WpaCtrl::builder()
+    let mut wpa = wpactrl::Client::builder()
         .ctrl_path(format!("/var/run/wpa_supplicant/{}", interface))
         .open()
         .map_err(|e| e.to_string())?;
@@ -80,7 +80,7 @@ pub async fn disconnect(interface: String) -> Result<(), String> {
 }
 
 pub async fn status(interface: String) -> Result<(u8, String), String> {
-    let mut wpa = wpactrl::WpaCtrl::builder()
+    let mut wpa = wpactrl::Client::builder()
         .ctrl_path(format!("/var/run/wpa_supplicant/{}", interface))
         .open()
         .map_err(|e| e.to_string())?;
