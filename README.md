@@ -23,7 +23,7 @@ In the case the service is not used in combination with the *meta-ics-dm* layer,
 
 There is the web based bluetooth client `client/web_ble.html`, which can be used to configure the wifi of the device using bluetooth.
 The web browser has to support the bluetooth API; e.g., the Chrome browser.
-The `BLE_SECTET` variable in `client/web_ble.js` has to be set to the shared secret, in order to authorize the bluetooth connection.
+The `BLE_SECRET` variable in `client/web_ble.js` has to be set to the shared secret, in order to authorize the bluetooth connection.
 
 ## License
 
