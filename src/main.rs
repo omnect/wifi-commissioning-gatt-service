@@ -16,10 +16,13 @@ use tokio::time::interval;
 #[clap(version, author)]
 #[clap(setting = AppSettings::ColoredHelp)]
 struct Opts {
+    /// (wireless) network interface name
     #[clap(short, long, default_value = "wlan0")]
     interface: String,
+
+    /// secret shared between client and server used for BLE communication
     #[clap(short, long)]
-    device_id: String,
+    ble_secret: String,
 }
 
 const MANUFACTURER_ID: u16 = 0xc6c6;
@@ -90,7 +93,7 @@ async fn main() -> bluer::Result<()> {
         &adapter_name
     );
 
-    let authorize_service = Arc::new(Mutex::new(AuthorizeService::new(opts.device_id.clone())));
+    let authorize_service = Arc::new(Mutex::new(AuthorizeService::new(opts.ble_secret.clone())));
     let mut scan_service = ScanService::new(opts.interface.clone(), authorize_service.clone());
     let mut connect_service =
         ConnectService::new(opts.interface.clone(), authorize_service.clone());
