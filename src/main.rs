@@ -16,6 +16,7 @@ use tokio::time::interval;
 #[clap(version, author)]
 #[clap(setting = AppSettings::ColoredHelp)]
 struct Opts {
+    /// (wireless) network interface name
     #[clap(short, long, default_value = "wlan0")]
     interface: String,
 
