@@ -16,8 +16,8 @@ This service uses the following command line options:
 The crate `wifi-commissioning-gatt-service` has the optional feature `systemd`.<br>
 If you enable `systemd` it [notifies](https://www.freedesktop.org/software/systemd/man/sd_notify.html#READY=1) `systemd` that the startup is finished.<br>
 
-The systemd service file `systemd/wifi-commissioning-gatt@.service` is using the script `ics_dm_get_deviceid.sh` (see *-b* option), in order to supply the device ID.
-In the case the service is not used in combination with the *meta-ics-dm* layer, it has to be adapted accordingly.
+The systemd service file `systemd/wifi-commissioning-gatt@.service` is using the script `omnect_get_deviceid.sh` (see *-b* option), in order to supply the device ID.
+In the case the service is not used in combination with the *meta-omnect* layer, it has to be adapted accordingly.
 
 ## Test
 
