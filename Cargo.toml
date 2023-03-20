@@ -19,7 +19,7 @@ log = "0.4"
 regex = "1.5"
 sd-notify = { version = "0.4", optional = true }
 sha3 = "0.9"
-tokio = { version = "1.23", features = [
+tokio = { version = "1.26", features = [
     "io-std",
     "io-util",
     "rt-multi-thread",
