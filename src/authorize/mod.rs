@@ -48,7 +48,7 @@ async fn write_key(
     let len = new_value.len();
     if len + offset > sha3::Sha3_256::output_size() {
         error!("Key write invalid length.");
-        return Err(ReqError::InvalidValueLength.into());
+        return Err(ReqError::InvalidValueLength);
     }
     let mut key = shared.key.lock().await;
     key.splice(offset..offset + len, new_value.iter().cloned());

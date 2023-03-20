@@ -1,8 +1,9 @@
 use log::{debug, error, info};
+use std::fmt::Write;
 
 fn unescape_hex(ssid: &str) -> Vec<u8> {
     let re = regex::bytes::Regex::new(r"\\(\\|(x([0-9a-fA-F]{2})))").unwrap();
-    let out = re.replace_all(&ssid.as_bytes(), |caps: &regex::bytes::Captures| {
+    let out = re.replace_all(ssid.as_bytes(), |caps: &regex::bytes::Captures| {
         if caps[0] == [0x5Cu8, 0x5Cu8] {
             [0x5Cu8]
         } else {
@@ -16,15 +17,15 @@ fn escape_invalid_unicode(bytestring: Vec<u8>) -> String {
     let mut escaped = String::with_capacity(bytestring.len() * 2);
     let mut bytes: &[u8] = &bytestring;
     loop {
-        let s = std::str::from_utf8(&bytes);
+        let s = std::str::from_utf8(bytes);
         match s {
             Err(e) => {
                 error!("Decoding {:?} failed: {}", bytes, e.to_string());
                 let (good, bad) = bytes.split_at(e.valid_up_to());
-                if good.len() > 0 {
-                    escaped += std::str::from_utf8(&good).unwrap(); // this cannot fail
+                if !good.is_empty() {
+                    escaped += std::str::from_utf8(good).unwrap(); // this cannot fail
                 }
-                escaped += &format!("0x{:02X}", bad[0] as u8);
+                write!(&mut escaped, "{:#04X}", bad[0] as u8).unwrap();
                 bytes = &bytes[(e.valid_up_to() + 1)..]; // skip the offending byte
             }
             Ok(s) => {
@@ -47,14 +48,14 @@ fn escape_json(bytestring: Vec<u8>) -> String {
             '\r' => escaped += "\\r",
             '\x0C' => escaped += "\\f",
             '\t' => escaped += "\\t",
-            c if c < ' ' => escaped += &format!("\\u00{:02X}", c as u16),
+            c if c < ' ' => write!(&mut escaped, "\\u00{:02X}", c as u16).unwrap(),
             c if c >= '\u{10000}' => {
                 let u = c as u32 - 0x10000u32;
                 let h = (u >> 10) as u16 + 0xD800u16;
                 let l = (u & 0x03FFu32) as u16 + 0xDC00u16;
-                escaped += &format!("\\u{:04X}\\u{:04X}", h, l)
+                write!(&mut escaped, "\\u{:04X}\\u{:04X}", h, l).unwrap()
             }
-            c if c > '~' => escaped += &format!("\\u{:04X}", c as u16),
+            c if c > '~' => write!(&mut escaped, "\\u{:04X}", c as u16).unwrap(),
             c => escaped.push(c),
         }
     }
@@ -64,12 +65,13 @@ fn escape_json(bytestring: Vec<u8>) -> String {
 fn parse_aps(aps: &str) -> String {
     let re = regex::Regex::new(r"(([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2})\t([0-9]+)\t(-?[0-9]+)\t((\[[a-zA-Z0-9+-]+\]))*\t([^\n]*)\n").unwrap();
     let mut json: String = String::new();
-    json.push_str("[");
+    json.push('[');
     for cap in re.captures_iter(aps) {
         if json.len() > 1 {
-            json.push_str(",");
+            json.push(',');
         }
-        json.push_str(&format!(
+        write!(
+            &mut json,
             "{{\"ssid\":\"{}\",\
                \"rssi\":\"{}\",\
                \"mac\":\"{}\",\
@@ -78,9 +80,10 @@ fn parse_aps(aps: &str) -> String {
             &cap[4],
             &cap[1],
             &cap[3]
-        ));
+        )
+        .unwrap();
     }
-    json.push_str("]");
+    json.push(']');
     json
 }
 
@@ -110,9 +113,7 @@ pub async fn scan(interface: String) -> Result<Vec<u8>, String> {
             debug!("Scan successful: {:?}", json);
             return Ok(json.as_bytes().to_vec());
         }
-        Err(e) => {
-            return Err(e);
-        }
+        Err(e) => Err(e),
     }
 }
 
