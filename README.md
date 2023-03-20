@@ -1,4 +1,5 @@
 # wifi-commissioning-gatt-service
+**Product page: https://www.omnect.io/home**
 
 This service is intended to run on a device that is delivered to an end-user without a preset configuration for its wifi settings.
 It allows a bluetooth client (like a Chrome browser running on a PC or smartphone) to make the appropriate settings
@@ -33,3 +34,16 @@ Licensed under either of
 * MIT license (./LICENSE-MIT or <http://opensource.org/licenses/MIT>)
 
 at your option.
+
+# Contribution
+
+Unless you explicitly state otherwise, any contribution intentionally
+submitted for inclusion in the work by you, as defined in the Apache-2.0
+license, shall be dual licensed as above, without any additional terms or
+conditions.
+
+---
+
+copyright (c) 2021 conplement AG<br>
+Content published under the Apache License Version 2.0 or MIT license, are marked as such. They may be used in accordance with the stated license conditions.
+
