@@ -69,7 +69,7 @@ async fn read_state(
 ) -> ReqResult<Vec<u8>> {
     if !shared.authorized.lock().await.is_authorized().await {
         error!("Connect state read no auth {:?}", &req);
-        return Err(ReqError::NotAuthorized.into());
+        return Err(ReqError::NotAuthorized);
     }
     let state_connect_value = shared.state_connect_value.lock().await.clone();
     info!("Connect state read request {:?}", &req);
@@ -84,17 +84,17 @@ async fn write_state(
 ) -> ReqResult<()> {
     if !shared.authorized.lock().await.is_authorized().await {
         error!("Connect state write no auth {:?}", &req);
-        return Err(ReqError::NotAuthorized.into());
+        return Err(ReqError::NotAuthorized);
     }
     info!("Connect state write request {:?}", &req);
     debug!(" with value {:x?}", &new_value);
     if new_value.len() > 1 {
         error!("Connect state write invalid length.");
-        return Err(ReqError::InvalidValueLength.into());
+        return Err(ReqError::InvalidValueLength);
     }
     if new_value[0] != 0 && new_value[0] != 1 {
         error!("Connect state write invalid status, expected either 0 or 1.");
-        return Err(ReqError::NotSupported.into());
+        return Err(ReqError::NotSupported);
     }
     let mut state_connect_value = shared.state_connect_value.lock().await;
     let old = state_connect_value[0];
@@ -113,7 +113,7 @@ async fn write_state(
             Err(e) => {
                 error!("Connect failed: {:?}", e);
                 state_connect_value[0] = STATE_CONNECT_FAILED;
-                return Err(ReqError::Failed.into());
+                return Err(ReqError::Failed);
             }
             Ok(_o) => {
                 info!("Connect successful, waiting for ip");
@@ -126,7 +126,7 @@ async fn write_state(
             Err(e) => {
                 error!("Disconnect failed: {:?}", e);
                 state_connect_value[0] = STATE_CONNECT_FAILED;
-                return Err(ReqError::Failed.into());
+                return Err(ReqError::Failed);
             }
             Ok(_o) => {
                 info!("Disconnect successful");
@@ -163,7 +163,7 @@ async fn read_ssid(
 ) -> ReqResult<Vec<u8>> {
     if !shared.authorized.lock().await.is_authorized().await {
         error!("Connect SSID read no auth {:?}", &req);
-        return Err(ReqError::NotAuthorized.into());
+        return Err(ReqError::NotAuthorized);
     }
     let ssid_connect_value = shared.ssid_connect_value.lock().await.clone();
     info!("Connect SSID read request {:?}", &req);
@@ -172,14 +172,14 @@ async fn read_ssid(
     let mtu = req.mtu as usize;
     if offset > ssid_connect_value.len() {
         error!("Connect SSID returning invalid offset");
-        return Err(ReqError::InvalidOffset.into());
+        return Err(ReqError::InvalidOffset);
     }
     let mut size = ssid_connect_value.len() - offset;
     if size > mtu {
         size = mtu;
     }
     let slice = &ssid_connect_value[offset..(offset + size)];
-    let vector: Vec<u8> = slice.iter().cloned().collect();
+    let vector: Vec<u8> = slice.to_vec();
     debug!("Connect SSID read request returning {:x?}", &vector);
     Ok(vector)
 }
@@ -191,7 +191,7 @@ async fn write_ssid(
 ) -> ReqResult<()> {
     if !shared.authorized.lock().await.is_authorized().await {
         error!("Connect SSID write no auth {:?}", &req);
-        return Err(ReqError::NotAuthorized.into());
+        return Err(ReqError::NotAuthorized);
     }
     info!("Connect SSID write request {:?}", &req);
     debug!(" with value {:x?}", &new_value);
@@ -199,7 +199,7 @@ async fn write_ssid(
     let len = new_value.len();
     if len + offset > SSID_MAX_LENGTH {
         error!("Connect SSID write invalid length.");
-        return Err(ReqError::InvalidValueLength.into());
+        return Err(ReqError::InvalidValueLength);
     }
     let mut ssid_connect_value = shared.ssid_connect_value.lock().await;
     // The SSID field is variable length, and the user might write first a long ssid
@@ -223,7 +223,7 @@ async fn write_psk(
 ) -> ReqResult<()> {
     if !shared.authorized.lock().await.is_authorized().await {
         error!("Connect PSK write no auth {:?}", &req);
-        return Err(ReqError::NotAuthorized.into());
+        return Err(ReqError::NotAuthorized);
     }
     info!("Connect PSK write request {:?}", &req);
     debug!(" with value {:x?}", &new_value);
@@ -231,7 +231,7 @@ async fn write_psk(
     let len = new_value.len();
     if len + offset > PSK_LENGTH {
         error!("Connect PSK write invalid length.");
-        return Err(ReqError::InvalidValueLength.into());
+        return Err(ReqError::InvalidValueLength);
     }
     let mut psk_connect_value = shared.psk_connect_value.lock().await;
     psk_connect_value.splice(offset..offset + len, new_value.iter().cloned());

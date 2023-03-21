@@ -55,7 +55,7 @@ async fn main() -> bluer::Result<()> {
         match get_adapter().await {
             Ok((a, n)) => {
                 adapter = a;
-                adapter_name = n.to_string();
+                adapter_name = n;
             }
             Err(_e) => {
                 std::thread::sleep(Duration::from_secs(1));
