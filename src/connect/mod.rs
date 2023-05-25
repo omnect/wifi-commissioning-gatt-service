@@ -124,7 +124,7 @@ async fn write_state(
     let old_state = ConnectionState::try_from(state_connect_value[0]).unwrap(); // this cannot fail
     state_connect_value[0] = new_state as u8;
     match (old_state, new_state) {
-        (ConnectionState::Idle, ConnectionState::Connect) => {
+        (ConnectionState::Idle | ConnectionState::Connected, ConnectionState::Connect) => {
             // connect
             let ssid_connect_value = shared.ssid_connect_value.lock().await;
             let psk_connect_value = shared.psk_connect_value.lock().await;
