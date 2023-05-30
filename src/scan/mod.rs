@@ -9,6 +9,7 @@ use bluer::gatt::local::{
 use enclose::enclose;
 use futures::FutureExt;
 use log::{debug, error, info};
+use std::convert::TryFrom;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -19,10 +20,30 @@ const STATUS_SCAN_CHAR_UUID: uuid::Uuid = uuid::Uuid::from_u128(0x811ce66622e04a
 const SELECT_SCAN_CHAR_UUID: uuid::Uuid = uuid::Uuid::from_u128(0x811ce66622e04a6da50f0c78e076faa1);
 const RESULT_SCAN_CHAR_UUID: uuid::Uuid = uuid::Uuid::from_u128(0x811ce66622e04a6da50f0c78e076faa2);
 
-const STATUS_SCAN_IDLE: u8 = 0u8;
-const STATUS_SCAN_SCAN: u8 = 1u8;
-const STATUS_SCAN_FINISHED: u8 = 2u8;
-const STATUS_SCAN_ERROR: u8 = 3u8;
+#[derive(Clone, Copy)]
+#[repr(u8)]
+enum ScanState {
+    Idle = 0u8,
+    Scan = 1u8,
+    Finished = 2u8,
+    Error = 3u8,
+}
+
+impl std::convert::TryFrom<u8> for ScanState {
+    type Error = String;
+
+    fn try_from(value: u8) -> Result<Self, String> {
+        let result = match value {
+            0u8 => ScanState::Idle,
+            1u8 => ScanState::Scan,
+            2u8 => ScanState::Finished,
+            3u8 => ScanState::Error,
+            _ => Err(format!("invalid scan state: {}", value))?,
+        };
+
+        Ok(result)
+    }
+}
 
 struct ScanSharedData {
     // Scan status, u8
@@ -58,7 +79,7 @@ struct ScanSharedData {
 impl ScanSharedData {
     fn new(interf: String, auth: Arc<Mutex<dyn Authorized + Send + Sync>>) -> ScanSharedData {
         ScanSharedData {
-            status_scan_value: Mutex::new(vec![STATUS_SCAN_IDLE]),
+            status_scan_value: Mutex::new(vec![ScanState::Idle as u8]),
             result_scan_value: Mutex::new(vec![0; RESULT_FIELD_LENGTH]),
             results: Mutex::new(vec![]),
             select_max_records: Mutex::new(0u8),
@@ -125,54 +146,72 @@ async fn write_status(
         error!("Scan status write invalid length.");
         return Err(ReqError::InvalidValueLength);
     }
-    if new_value[0] != STATUS_SCAN_IDLE && new_value[0] != STATUS_SCAN_SCAN {
-        error!("Scan status write invalid status, expected either 0 or 1.");
-        return Err(ReqError::NotSupported);
-    }
+    let new_state = match ScanState::try_from(new_value[0]) {
+        Ok(state @ (ScanState::Idle | ScanState::Scan)) => state,
+        _ => {
+            error!("Scan status write invalid status, expected either 0 or 1.");
+            return Err(ReqError::NotSupported);
+        },
+    };
     let mut status_scan_value = shared.status_scan_value.lock().await;
-    let old = status_scan_value[0];
-    status_scan_value[0] = new_value[0];
-    // 0 -> 1: Start scan
-    if new_value[0] == STATUS_SCAN_SCAN && old == STATUS_SCAN_IDLE {
-        let scan_task_result = scan_utils::scan(shared.interface.clone()).await;
-        let mut results_store = shared.results.lock().await;
-        let mut select_max_records = shared.select_max_records.lock().await;
-        let mut select_scan_value = shared.select_scan_value.lock().await;
-        match scan_task_result {
-            Ok(json) => {
-                status_scan_value[0] = STATUS_SCAN_FINISHED; // scan finished
-                let max_fields = (json.len() + (RESULT_FIELD_LENGTH - 1)) / RESULT_FIELD_LENGTH;
-                if max_fields < 255 {
-                    *select_max_records = max_fields as u8;
-                    select_scan_value[0] = max_fields as u8;
-                    *results_store = json;
-                } else {
-                    error!("Scan failed due to too many results");
-                    status_scan_value[0] = STATUS_SCAN_ERROR; // scan failed
+    let old_state = ScanState::try_from(status_scan_value[0]).unwrap(); // this cannot fail
+    status_scan_value[0] = new_state as u8;
+    match (old_state, new_state) {
+        (ScanState::Idle, ScanState::Scan) => {
+            // Start scan
+            let scan_task_result = scan_utils::scan(shared.interface.clone()).await;
+            let mut results_store = shared.results.lock().await;
+            let mut select_max_records = shared.select_max_records.lock().await;
+            let mut select_scan_value = shared.select_scan_value.lock().await;
+            match scan_task_result {
+                Ok(json) => {
+                    status_scan_value[0] = ScanState::Finished as u8; // scan finished
+                    let max_fields = (json.len() + (RESULT_FIELD_LENGTH - 1)) / RESULT_FIELD_LENGTH;
+                    if max_fields < 255 {
+                        *select_max_records = max_fields as u8;
+                        select_scan_value[0] = max_fields as u8;
+                        *results_store = json;
+                    } else {
+                        error!("Scan failed due to too many results");
+                        status_scan_value[0] = ScanState::Error as u8; // scan failed
+                    }
+                }
+                Err(e) => {
+                    error!("Scan failed: {:?}", e);
+                    status_scan_value[0] = ScanState::Error as u8; // scan failed
                 }
             }
-            Err(e) => {
-                error!("Scan failed: {:?}", e);
-                status_scan_value[0] = STATUS_SCAN_ERROR; // scan failed
+            let mut opt = shared.status_scan_notify_opt.lock().await;
+            if let Some(writer) = opt.as_mut() {
+                info!("Notifying scan status with value {:x?}", &status_scan_value);
+                if let Err(err) = writer.notify(status_scan_value.clone()).await {
+                    error!("Notification stream error: {}", &err);
+                    *opt = None;
+                }
             }
-        }
-        let mut opt = shared.status_scan_notify_opt.lock().await;
-        if let Some(writer) = opt.as_mut() {
-            info!("Notifying scan status with value {:x?}", &status_scan_value);
-            if let Err(err) = writer.notify(status_scan_value.clone()).await {
-                error!("Notification stream error: {}", &err);
-                *opt = None;
-            }
-        }
-    } else if new_value[0] == STATUS_SCAN_IDLE && old != STATUS_SCAN_IDLE {
-        // 1 -> 0: Discard results
-        let mut results_store = shared.results.lock().await;
-        *results_store = vec![0; RESULT_FIELD_LENGTH]; // clear results
-        let mut select_max_records = shared.select_max_records.lock().await;
-        *select_max_records = 0u8;
-        let mut select_scan_value = shared.select_scan_value.lock().await;
-        select_scan_value[0] = 0u8;
-    }
+        },
+        (_old, ScanState::Scan) => {
+            // invalid
+            error!(
+                "Invalid scan state transition from {} to {}.",
+                old_state as u8, new_state as u8
+            );
+            return Err(ReqError::NotSupported);
+        },
+        (_old, ScanState::Idle) => {
+            // Discard results
+            let mut results_store = shared.results.lock().await;
+            *results_store = vec![0; RESULT_FIELD_LENGTH]; // clear results
+            let mut select_max_records = shared.select_max_records.lock().await;
+            *select_max_records = 0u8;
+            let mut select_scan_value = shared.select_scan_value.lock().await;
+            select_scan_value[0] = 0u8;
+        },
+        (_old, ScanState::Finished | ScanState::Error) => {
+            // unreachable
+        },
+    };
+
     Ok(())
 }
 

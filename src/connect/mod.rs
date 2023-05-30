@@ -8,6 +8,7 @@ use bluer::gatt::local::{
 use enclose::enclose;
 use futures::FutureExt;
 use log::{debug, error, info};
+use std::convert::TryFrom;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -23,10 +24,30 @@ const PSK_CONNECT_CHAR_UUID: uuid::Uuid = uuid::Uuid::from_u128(0x811ce66622e04a
 const SSID_MAX_LENGTH: usize = 32;
 const PSK_LENGTH: usize = 32;
 
-const STATE_CONNECT_IDLE: u8 = 0u8;
-const STATE_CONNECT_CONNECT: u8 = 1u8;
-const STATE_CONNECT_CONNECTED: u8 = 2u8;
-const STATE_CONNECT_FAILED: u8 = 3u8;
+#[derive(Clone, Copy)]
+#[repr(u8)]
+enum ConnectionState {
+    Idle = 0u8,
+    Connect = 1u8,
+    Connected = 2u8,
+    Failed = 3u8,
+}
+
+impl std::convert::TryFrom<u8> for ConnectionState {
+    type Error = String;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        let result = match value {
+            0u8 => ConnectionState::Idle,
+            1u8 => ConnectionState::Connect,
+            2u8 => ConnectionState::Connected,
+            3u8 => ConnectionState::Failed,
+            _ => Err(format!("invalid connection state: {}", value))?,
+        };
+
+        Ok(result)
+    }
+}
 
 struct ConnectSharedData {
     // Connect state, u8
@@ -53,7 +74,7 @@ struct ConnectSharedData {
 impl ConnectSharedData {
     fn new(interf: String, auth: Arc<Mutex<dyn Authorized + Send + Sync>>) -> ConnectSharedData {
         ConnectSharedData {
-            state_connect_value: Mutex::new(vec![STATE_CONNECT_IDLE]),
+            state_connect_value: Mutex::new(vec![ConnectionState::Idle as u8]),
             ssid_connect_value: Mutex::new(vec![0; SSID_MAX_LENGTH]),
             psk_connect_value: Mutex::new(vec![0; PSK_LENGTH]),
             state_connect_notify_opt: Mutex::new(Option::None),
@@ -92,47 +113,64 @@ async fn write_state(
         error!("Connect state write invalid length.");
         return Err(ReqError::InvalidValueLength);
     }
-    if new_value[0] != 0 && new_value[0] != 1 {
-        error!("Connect state write invalid status, expected either 0 or 1.");
-        return Err(ReqError::NotSupported);
-    }
+    let new_state = match ConnectionState::try_from(new_value[0]) {
+        Ok(state @ (ConnectionState::Idle | ConnectionState::Connect)) => state,
+        _ => {
+            error!("Connect state write invalid status, expected either 0 or 1.");
+            return Err(ReqError::NotSupported);
+        }
+    };
     let mut state_connect_value = shared.state_connect_value.lock().await;
-    let old = state_connect_value[0];
-    state_connect_value[0] = new_value[0];
-    if new_value[0] == STATE_CONNECT_CONNECT && old == STATE_CONNECT_IDLE {
-        // 0 -> 1: connect
-        let ssid_connect_value = shared.ssid_connect_value.lock().await;
-        let psk_connect_value = shared.psk_connect_value.lock().await;
-        let result = interface::connect(
-            shared.interface.clone(),
-            ssid_connect_value.clone(),
-            psk_connect_value.clone(),
-        )
-        .await;
-        match result {
-            Err(e) => {
-                error!("Connect failed: {:?}", e);
-                state_connect_value[0] = STATE_CONNECT_FAILED;
-                return Err(ReqError::Failed);
-            }
-            Ok(_o) => {
-                info!("Connect successful, waiting for ip");
-            }
-        }
-    } else if new_value[0] == STATE_CONNECT_IDLE && old != STATE_CONNECT_IDLE {
-        // 1 -> 0: disconnect
-        let result = interface::disconnect(shared.interface.clone()).await;
-        match result {
-            Err(e) => {
-                error!("Disconnect failed: {:?}", e);
-                state_connect_value[0] = STATE_CONNECT_FAILED;
-                return Err(ReqError::Failed);
-            }
-            Ok(_o) => {
-                info!("Disconnect successful");
+    let old_state = ConnectionState::try_from(state_connect_value[0]).unwrap(); // this cannot fail
+    state_connect_value[0] = new_state as u8;
+    match (old_state, new_state) {
+        (ConnectionState::Idle | ConnectionState::Connected, ConnectionState::Connect) => {
+            // connect
+            let ssid_connect_value = shared.ssid_connect_value.lock().await;
+            let psk_connect_value = shared.psk_connect_value.lock().await;
+            let result = interface::connect(
+                shared.interface.clone(),
+                ssid_connect_value.clone(),
+                psk_connect_value.clone(),
+            )
+            .await;
+            match result {
+                Err(e) => {
+                    error!("Connect failed: {:?}", e);
+                    state_connect_value[0] = ConnectionState::Failed as u8;
+                    return Err(ReqError::Failed);
+                }
+                Ok(_o) => {
+                    info!("Connect successful, waiting for ip");
+                }
             }
         }
-    }
+        (_old, ConnectionState::Connect) => {
+            // invalid
+            error!(
+                "Invalid connection state transition from {} to {}.",
+                old_state as u8, new_state as u8
+            );
+            return Err(ReqError::NotSupported);
+        }
+        (_old, ConnectionState::Idle) => {
+            // disconnect
+            let result = interface::disconnect(shared.interface.clone()).await;
+            match result {
+                Err(e) => {
+                    error!("Disconnect failed: {:?}", e);
+                    state_connect_value[0] = ConnectionState::Failed as u8;
+                    return Err(ReqError::Failed);
+                }
+                Ok(_o) => {
+                    info!("Disconnect successful");
+                }
+            }
+        }
+        (_old, ConnectionState::Connected | ConnectionState::Failed) => {
+            // unreachable
+        }
+    };
 
     let mut opt = shared.state_connect_notify_opt.lock().await;
     if let Some(writer) = opt.as_mut() {
@@ -342,18 +380,18 @@ impl ConnectService {
     pub async fn tick(&mut self) {
         let mut notify = false;
         let mut state_connect_value = self.shared.state_connect_value.lock().await;
-        if state_connect_value[0] == STATE_CONNECT_CONNECT {
+        if let Ok(ConnectionState::Connect) = ConnectionState::try_from(state_connect_value[0]) {
             let result = interface::status(self.shared.interface.clone()).await;
             match result {
                 Err(e) => {
                     error!("Status failed: {:?}", e);
-                    state_connect_value[0] = STATE_CONNECT_FAILED;
+                    state_connect_value[0] = ConnectionState::Failed as u8;
                     notify = true;
                 }
                 Ok((status, ip)) => {
                     if status == 1u8 && ip != "<unknown>" {
                         info!("Connected with ip {:?}", ip);
-                        state_connect_value[0] = STATE_CONNECT_CONNECTED;
+                        state_connect_value[0] = ConnectionState::Connected as u8;
                         notify = true
                     }
                 }
