@@ -5,6 +5,9 @@ This service is intended to run on a device that is delivered to an end-user wit
 It allows a bluetooth client (like a Chrome browser running on a PC or smartphone) to make the appropriate settings
 to connect the device to an existing wlan access point.
 
+## Notice
+The code provided is not recommended for production scenarios. It is a proof of concept in order to demonstrate the underlying workflow. Further it is based on Bluez which is also not the recommended bluetooth stack and which might not be suitable for a required bluetooth certification.
+
 ## Usage
 This service uses the following command line options:
 - -b, --ble-secret \<BLE_SECRET\>
