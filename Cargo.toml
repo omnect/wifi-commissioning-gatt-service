@@ -1,6 +1,6 @@
 [package]
 name = "wifi-commissioning-gatt-service"
-version = "0.3.8"
+version = "0.3.9"
 authors = ["omnect@conplement.de>"]
 edition = "2018"
 repository = "git@github.com:omnect/wifi-commissioning-gatt-service.git"
