@@ -25,7 +25,7 @@ fn escape_invalid_unicode(bytestring: Vec<u8>) -> String {
                 if !good.is_empty() {
                     escaped += std::str::from_utf8(good).unwrap(); // this cannot fail
                 }
-                write!(&mut escaped, "{:#04X}", bad[0] as u8).unwrap();
+                write!(&mut escaped, "{:#04X}", bad[0]).unwrap();
                 bytes = &bytes[(e.valid_up_to() + 1)..]; // skip the offending byte
             }
             Ok(s) => {
