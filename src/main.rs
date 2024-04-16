@@ -78,7 +78,7 @@ async fn main() -> bluer::Result<()> {
         service_uuids: vec![scan::SCAN_SERVICE_UUID].into_iter().collect(),
         manufacturer_data,
         discoverable: Some(true),
-        local_name: Some("DmWifiConfig".to_string()),
+        local_name: Some("OmnectWifiConfig".to_string()),
         ..Default::default()
     };
     let _adv_handle = adapter.advertise(le_advertisement).await?;
