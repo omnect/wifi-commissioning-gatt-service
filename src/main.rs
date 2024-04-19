@@ -8,7 +8,7 @@ use clap::{AppSettings, Parser};
 use connect::ConnectService;
 use log::{debug, info};
 use scan::ScanService;
-use std::{collections::BTreeMap, sync::Arc, time::Duration};
+use std::{collections::BTreeMap, env, sync::Arc, time::Duration};
 use tokio::sync::Mutex;
 use tokio::time::interval;
 
@@ -43,6 +43,8 @@ async fn get_adapter() -> Result<(bluer::Adapter, String), String> {
     }
 }
 
+static DEFAULT_SERVICE_BEACON: &str = "OmnectWifiConfig";
+
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> bluer::Result<()> {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
@@ -73,12 +75,20 @@ async fn main() -> bluer::Result<()> {
     );
     let mut manufacturer_data = BTreeMap::new();
     manufacturer_data.insert(MANUFACTURER_ID, MANUFACTURER_ID_VAL.to_vec());
+    let local_name = match env::var("SCAN_SERVICE_BEACON") {
+        Err(_why) => {
+	    (*DEFAULT_SERVICE_BEACON).to_string()
+	}
+        Ok(beacon) => {
+	    beacon
+	}
+    };
     let le_advertisement = Advertisement {
         advertisement_type: bluer::adv::Type::Peripheral,
         service_uuids: vec![scan::SCAN_SERVICE_UUID].into_iter().collect(),
         manufacturer_data,
         discoverable: Some(true),
-        local_name: Some("OmnectWifiConfig".to_string()),
+        local_name: Some(local_name),
         ..Default::default()
     };
     let _adv_handle = adapter.advertise(le_advertisement).await?;
