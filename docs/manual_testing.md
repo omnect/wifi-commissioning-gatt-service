@@ -16,8 +16,8 @@ SetDiscoveryFilter success
 Discovery started
 [CHG] Controller 18:56:80:76:D9:AE Discovering: yes
 ...
-[CHG] Device B8:27:EB:EB:B8:7A Name: OmnectWifiConfig
-[CHG] Device B8:27:EB:EB:B8:7A Alias: OmnectWifiConfig
+[CHG] Device B8:27:EB:EB:B8:7A Name: omnectWifiConfig
+[CHG] Device B8:27:EB:EB:B8:7A Alias: omnectWifiConfig
 [CHG] Device B8:27:EB:EB:B8:7A ManufacturerData Key: 0xc6c6
 [CHG] Device B8:27:EB:EB:B8:7A ManufacturerData Value:
   21 22 23 24                                      !"#$
@@ -36,11 +36,11 @@ Connection successful
 [CHG] Device B8:27:EB:EB:B8:7A Name: raspberrypi
 [CHG] Device B8:27:EB:EB:B8:7A Alias: raspberrypi
 ...
-[OmnectWifiConfig]# menu gatt
+[omnectWifiConfig]# menu gatt
 ...
-[OmnectWifiConfig]# select-attribute 811ce666-22e0-4a6d-a50f-0c78e076faa6
+[omnectWifiConfig]# select-attribute 811ce666-22e0-4a6d-a50f-0c78e076faa6
 [raspberrypi:/service00XX/char00XX]# write "0x00 0x00 0x00 ... 0x00" # insert sha-3 hash of device id here
-[OmnectWifiConfig]# select-attribute 811ce666-22e0-4a6d-a50f-0c78e076faa0
+[omnectWifiConfig]# select-attribute 811ce666-22e0-4a6d-a50f-0c78e076faa0
 [raspberrypi:/service00e5/char00ea]# read
 Attempting to read /org/bluez/hci0/dev_B8_27_EB_EB_B8_7A/service00e5/char00ea
 [CHG] Attribute /org/bluez/hci0/dev_B8_27_EB_EB_B8_7A/service00e5/char00ea Value:

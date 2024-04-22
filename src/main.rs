@@ -43,7 +43,7 @@ async fn get_adapter() -> Result<(bluer::Adapter, String), String> {
     }
 }
 
-static DEFAULT_SERVICE_BEACON: &str = "OmnectWifiConfig";
+static DEFAULT_SCAN_SERVICE_BEACON: &str = "omnectWifiConfig";
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> bluer::Result<()> {
@@ -75,14 +75,8 @@ async fn main() -> bluer::Result<()> {
     );
     let mut manufacturer_data = BTreeMap::new();
     manufacturer_data.insert(MANUFACTURER_ID, MANUFACTURER_ID_VAL.to_vec());
-    let local_name = match env::var("SCAN_SERVICE_BEACON") {
-        Err(_why) => {
-	    (*DEFAULT_SERVICE_BEACON).to_string()
-	}
-        Ok(beacon) => {
-	    beacon
-	}
-    };
+    let local_name = env::var("SCAN_SERVICE_BEACON").
+	unwrap_or((*DEFAULT_SCAN_SERVICE_BEACON).to_string());
     let le_advertisement = Advertisement {
         advertisement_type: bluer::adv::Type::Peripheral,
         service_uuids: vec![scan::SCAN_SERVICE_UUID].into_iter().collect(),

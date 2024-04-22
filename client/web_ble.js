@@ -44,11 +44,11 @@ var accessPointsObj = [];
 
 
 // This function requests BLE devices nearby 
-// with the device prefix name 'OmnectWifiConfig'.
+// with the device prefix name 'omnectWifiConfig'.
 async function requestDevice() {
-  log('> Requesting Bluetooth Devices OmnectWifiConfig*...');
+  log('> Requesting Bluetooth Devices omnectWifiConfig*...');
   bluetoothDevice = await navigator.bluetooth.requestDevice({
-      filters: [{namePrefix: 'OmnectWifiConfig'}],
+      filters: [{namePrefix: 'omnectWifiConfig'}],
       optionalServices: [SVC_WIFI_SCANNER_UUID, SVC_WIFI_CONFIG_UUID, SVC_WIFI_AUTH_UUID]
       });
   bluetoothDevice.addEventListener('gattserverdisconnected', onDisconnected);
