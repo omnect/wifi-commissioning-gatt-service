@@ -25,8 +25,10 @@ struct Opts {
     ble_secret: String,
 }
 
-const MANUFACTURER_ID: u16 = 0xc6c6;
-const MANUFACTURER_ID_VAL: [u8; 4] = [0x21, 0x22, 0x23, 0x24];
+// company ID: 0xffff == default for company not member in Bluetooth SIG
+const MANUFACTURER_ID: u16 = 0xffff;
+// manufacturer data: "_cp_"
+const MANUFACTURER_ID_VAL: [u8; 4] = [0x5f, 0x63, 0x70, 0x5f];
 
 async fn get_adapter() -> Result<(bluer::Adapter, String), String> {
     let session = bluer::Session::new().await.map_err(|e| e.to_string())?;
