@@ -34,9 +34,8 @@ const WIFI_CONFIG_STATE_CONNECT   = 1;
 const WIFI_CONFIG_STATE_JOINED    = 2;
 const WIFI_CONFIG_STATE_ERROR     = 3;
 
-const BLE_SECRET = 'some-random-id';
-
 // Global Variables
+var bleSecret = 'some-secret';
 var bluetoothDevice;
 var wifiScannerStateCharacteristic;
 var wifiConfigStateCharacteristic;
@@ -44,11 +43,12 @@ var accessPointsObj = [];
 
 
 // This function requests BLE devices nearby 
-// with the device prefix name 'DmWifiConfig'.
+// with the device prefix name 'omnectWifiConfig'.
 async function requestDevice() {
-  log('> Requesting Bluetooth Devices DmWifiConfig*...');
+  log('> Requesting Bluetooth Devices omnectWifiConfig*...');
+  bleSecret = document.querySelector('#txtSecret').value;
   bluetoothDevice = await navigator.bluetooth.requestDevice({
-      filters: [{namePrefix: 'DmWifiConfig'}],
+      filters: [{namePrefix: 'omnectWifiConfig'}],
       optionalServices: [SVC_WIFI_SCANNER_UUID, SVC_WIFI_CONFIG_UUID, SVC_WIFI_AUTH_UUID]
       });
   bluetoothDevice.addEventListener('gattserverdisconnected', onDisconnected);
@@ -103,7 +103,7 @@ async function connectDeviceAndCacheCharacteristics() {
 
   const wifiAuthService = await server.getPrimaryService(SVC_WIFI_AUTH_UUID);
   wifiAuthKeyCharacteristic = await wifiAuthService.getCharacteristic(CHR_WIFI_AUTH_KEY_UUID);
-  var hash = sha3_256(BLE_SECRET);
+  var hash = sha3_256(bleSecret);
   console.log(hash);
   var hash_ab = new Uint8Array(hash.match(/[\da-f]{2}/gi).map(function (value) {
 		return parseInt(value, 16)
@@ -121,6 +121,7 @@ function handleWiFiScannerStateChanged(event) {
 
   switch (wifiScannerState) {
     case WIFI_SCANNER_STATE_IDLE:
+      document.querySelector('#txtSecret').disabled = true;
       document.querySelector('#btnConnect').disabled = true;
       document.querySelector('#btnScan').disabled = false;
       document.querySelector('#btnReset').disabled = false;
@@ -128,6 +129,7 @@ function handleWiFiScannerStateChanged(event) {
 
     case WIFI_SCANNER_STATE_SCANNED:
       readWiFiScannerResults();
+      document.querySelector('#txtSecret').disabled = true;
       document.querySelector('#btnConnect').disabled = true;
       document.querySelector('#btnScan').disabled = false;
       document.querySelector('#btnReset').disabled = false;
@@ -160,6 +162,7 @@ function handleWiFiConfigStateChanged(event) {
       break;
 
     case WIFI_CONFIG_STATE_CONNECT:
+      document.querySelector('#txtSecret').disabled = true;
       document.querySelector('#btnConnect').disabled = true;
       document.querySelector('#btnScan').disabled = false;
       document.querySelector('#btnReset').disabled = false;
@@ -170,6 +173,7 @@ function handleWiFiConfigStateChanged(event) {
 
     case WIFI_CONFIG_STATE_JOINED:
       joinedEventHandler();
+      document.querySelector('#txtSecret').disabled = true;
       document.querySelector('#btnConnect').disabled = true;
       document.querySelector('#btnScan').disabled = false;
       document.querySelector('#btnReset').disabled = false;
@@ -179,6 +183,7 @@ function handleWiFiConfigStateChanged(event) {
       break;
 
     case WIFI_CONFIG_STATE_ERROR:
+      document.querySelector('#txtSecret').disabled = true;
       document.querySelector('#btnConnect').disabled = true;
       document.querySelector('#btnScan').disabled = false;
       document.querySelector('#btnReset').disabled = false;
@@ -288,6 +293,7 @@ async function onConnectButtonClick() {
 // This function handles the click event of the button 'Reset Device'.
 function onResetButtonClick() {
   // Disable/Enable the buttons
+  document.querySelector('#txtSecret').disabled = false;
   document.querySelector('#btnConnect').disabled = false;
   document.querySelector('#btnScan').disabled = true;
   document.querySelector('#btnReset').disabled = true;

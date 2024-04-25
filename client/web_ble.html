@@ -70,6 +70,13 @@ Apache License, Version 2.0
 
    <table align="center">
      <tr>
+        <td>
+	  <label for="txtPassword">BLE Secret:<br>(note: device ID is used on device by default)</label>
+	  <br>
+          <input id="txtSecret" style="width:246px;text-align-last:center;"/>
+        </td>
+     </tr>
+     <tr>
        <td>
           <button id="btnConnect" class="buttons">Connect Bluetooth Device</button>
        </td>
@@ -101,6 +108,9 @@ Apache License, Version 2.0
       </tr>
    </table>
 
+  <script>
+    document.querySelector('#txtSecret').placeholder = bleSecret;
+  </script>
   <script>
     // Live Logger
 
