@@ -25,6 +25,8 @@ struct Opts {
     ble_secret: String,
 }
 
+static DEFAULT_SCAN_SERVICE_BEACON: &str = "omnectWifiConfig";
+
 // company ID: 0xffff == default for company not member in Bluetooth SIG
 const MANUFACTURER_ID: u16 = 0xffff;
 // manufacturer data: "_cp_"
@@ -44,8 +46,6 @@ async fn get_adapter() -> Result<(bluer::Adapter, String), String> {
         None => Err("No adapter found".to_string()),
     }
 }
-
-static DEFAULT_SCAN_SERVICE_BEACON: &str = "omnectWifiConfig";
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> bluer::Result<()> {
