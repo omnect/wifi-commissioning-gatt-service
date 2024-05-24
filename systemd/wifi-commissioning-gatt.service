@@ -1,0 +1,17 @@
+[Unit]
+Description=wifi-commissioning-gatt: commissioning wifi via bt
+Requires=wpa_supplicant.service bluetooth.service bluetooth.target
+After=wpa_supplicant.service bluetooth.service bluetooth.target
+
+[Service]
+Type=notify
+Restart=on-failure
+RestartSec=5
+
+User=wifi-commissioning-gatt
+Group=wpa_supplicant
+
+ExecStart=/bin/bash -c '/usr/bin/wifi-commissioning-gatt-service -i $(find /sys/class/net -follow -maxdepth 2 -name phy80211 2>/dev/null | cut -d / -f 5) -b $(/usr/bin/omnect_get_deviceid.sh)'
+
+[Install]
+WantedBy=multi-user.target

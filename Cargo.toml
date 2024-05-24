@@ -4,7 +4,7 @@ edition = "2018"
 license = "MIT OR Apache-2.0"
 name = "wifi-commissioning-gatt-service"
 repository = "git@github.com:omnect/wifi-commissioning-gatt-service.git"
-version = "0.4.0"
+version = "0.4.1"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
