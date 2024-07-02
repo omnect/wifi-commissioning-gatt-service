@@ -1,24 +1,27 @@
 [package]
 authors = ["omnect@conplement.de>"]
-edition = "2018"
+description = "This experimental service allows wifi commissioning via bluetooth."
+edition = "2021"
+homepage = "https://www.omnect.io/home"
 license = "MIT OR Apache-2.0"
 name = "wifi-commissioning-gatt-service"
 repository = "git@github.com:omnect/wifi-commissioning-gatt-service.git"
-version = "0.4.1"
+version = "0.4.2"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 async-trait = "0.1"
-bluer = { version = "0.15", features = ["bluetoothd"] }
-clap = { version = "3.2", features = ["derive"] }
+bluer = { version = "0.17", features = ["bluetoothd"] }
+clap = { version = "4.5", features = ["derive"] }
 enclose = "1.1"
-env_logger = "0.8"
+# ToDo: check if 'default-features = false' can be removed. currently needed as workaround for cargo-bitbake.
+env_logger = { version = "0.11", default-features = false }
 futures = "0.3"
 log = "0.4"
 regex = "1.5"
 sd-notify = { version = "0.4", optional = true }
-sha3 = "0.9"
+sha3 = "0.10"
 tokio = { version = "1.26", features = [
     "io-std",
     "io-util",

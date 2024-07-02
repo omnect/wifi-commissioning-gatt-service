@@ -4,7 +4,7 @@ pub mod scan;
 
 use authorize::AuthorizeService;
 use bluer::{adv::Advertisement, gatt::local::Application};
-use clap::{AppSettings, Parser};
+use clap::Parser;
 use connect::ConnectService;
 use log::{debug, info};
 use scan::ScanService;
@@ -14,7 +14,6 @@ use tokio::time::interval;
 
 #[derive(Parser)]
 #[clap(version, author)]
-#[clap(setting = AppSettings::ColoredHelp)]
 struct Opts {
     /// (wireless) network interface name
     #[clap(short, long, default_value = "wlan0")]
@@ -77,8 +76,8 @@ async fn main() -> bluer::Result<()> {
     );
     let mut manufacturer_data = BTreeMap::new();
     manufacturer_data.insert(MANUFACTURER_ID, MANUFACTURER_ID_VAL.to_vec());
-    let local_name = env::var("SCAN_SERVICE_BEACON").
-	unwrap_or((*DEFAULT_SCAN_SERVICE_BEACON).to_string());
+    let local_name =
+        env::var("SCAN_SERVICE_BEACON").unwrap_or((*DEFAULT_SCAN_SERVICE_BEACON).to_string());
     let le_advertisement = Advertisement {
         advertisement_type: bluer::adv::Type::Peripheral,
         service_uuids: vec![scan::SCAN_SERVICE_UUID].into_iter().collect(),
