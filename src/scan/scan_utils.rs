@@ -111,7 +111,7 @@ pub async fn scan(interface: String) -> Result<Vec<u8>, String> {
         Ok(found_hotspots) => {
             let json = parse_aps(&found_hotspots);
             debug!("Scan successful: {:?}", json);
-            return Ok(json.as_bytes().to_vec());
+            Ok(json.as_bytes().to_vec())
         }
         Err(e) => Err(e),
     }
