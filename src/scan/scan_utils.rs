@@ -144,7 +144,7 @@ mod tests {
         let input = r#"01:02:03:04:05:06	1234	-99	[WPA-PSK-CCMP+TKIP][WPA2-PSK-CCMP+TKIP][WPS][ESS]	SomeName\xf0\x9f\x92\xa9
         02:03:04:05:06:07	2345	-98	[WPA-PSK-TKIP][WPA2-PSK-CCMP][ESS]	\x00\x00\\\x00\\\x01\x01\x01
         03:04:05:06:07:08	3456	-97	[WPA2-PSK-CCMP][WPS][ESS]	"SomeOtherName"
-        04:05:06:07:08:09	4567	-96	[WPA2-PSK-CCMP][ESS]	
+        04:05:06:07:08:09	4567	-96	[WPA2-PSK-CCMP][ESS]
         "#;
         let output = parse_aps(input);
         assert_eq!(

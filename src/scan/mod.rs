@@ -166,7 +166,8 @@ async fn write_status(
             match scan_task_result {
                 Ok(json) => {
                     status_scan_value[0] = ScanState::Finished as u8; // scan finished
-                    let max_fields = json.len().div_ceil(RESULT_FIELD_LENGTH);
+                    let max_fields =
+                        (json.len() + RESULT_FIELD_LENGTH - 1).div_ceil(RESULT_FIELD_LENGTH);
                     if max_fields < 255 {
                         *select_max_records = max_fields as u8;
                         select_scan_value[0] = max_fields as u8;
