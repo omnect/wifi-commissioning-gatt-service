@@ -151,7 +151,7 @@ async fn write_status(
         _ => {
             error!("Scan status write invalid status, expected either 0 or 1.");
             return Err(ReqError::NotSupported);
-        },
+        }
     };
     let mut status_scan_value = shared.status_scan_value.lock().await;
     let old_state = ScanState::try_from(status_scan_value[0]).unwrap(); // this cannot fail
@@ -166,7 +166,8 @@ async fn write_status(
             match scan_task_result {
                 Ok(json) => {
                     status_scan_value[0] = ScanState::Finished as u8; // scan finished
-                    let max_fields = (json.len() + (RESULT_FIELD_LENGTH - 1)) / RESULT_FIELD_LENGTH;
+                    let max_fields =
+                        (json.len() + RESULT_FIELD_LENGTH - 1).div_ceil(RESULT_FIELD_LENGTH);
                     if max_fields < 255 {
                         *select_max_records = max_fields as u8;
                         select_scan_value[0] = max_fields as u8;
@@ -189,7 +190,7 @@ async fn write_status(
                     *opt = None;
                 }
             }
-        },
+        }
         (_old, ScanState::Scan) => {
             // invalid
             error!(
@@ -197,7 +198,7 @@ async fn write_status(
                 old_state as u8, new_state as u8
             );
             return Err(ReqError::NotSupported);
-        },
+        }
         (_old, ScanState::Idle) => {
             // Discard results
             let mut results_store = shared.results.lock().await;
@@ -206,10 +207,10 @@ async fn write_status(
             *select_max_records = 0u8;
             let mut select_scan_value = shared.select_scan_value.lock().await;
             select_scan_value[0] = 0u8;
-        },
+        }
         (_old, ScanState::Finished | ScanState::Error) => {
             // unreachable
-        },
+        }
     };
 
     Ok(())
