@@ -1,9 +1,9 @@
-use crate::authorize;
+use crate::authorize::AuthorizeService;
 use bluer::gatt::local::{
-    characteristic_control, service_control, Characteristic, CharacteristicNotifier,
-    CharacteristicNotify, CharacteristicNotifyMethod, CharacteristicRead,
-    CharacteristicReadRequest, CharacteristicWrite, CharacteristicWriteMethod,
-    CharacteristicWriteRequest, ReqError, ReqResult, Service,
+    Characteristic, CharacteristicNotifier, CharacteristicNotify, CharacteristicNotifyMethod,
+    CharacteristicRead, CharacteristicReadRequest, CharacteristicWrite, CharacteristicWriteMethod,
+    CharacteristicWriteRequest, ReqError, ReqResult, Service, characteristic_control,
+    service_control,
 };
 use enclose::enclose;
 use futures::FutureExt;
@@ -67,12 +67,12 @@ struct ConnectSharedData {
     // PSK = PBKDF2(HMAC−SHA1, passphrase, ssid, 4096, 256)
     // see https://en.wikipedia.org/wiki/PBKDF2
     psk_connect_value: Mutex<Vec<u8>>,
-    authorized: Arc<Mutex<dyn Authorized + Send + Sync>>,
+    authorized: Arc<Mutex<AuthorizeService>>,
     interface: String,
 }
 
 impl ConnectSharedData {
-    fn new(interf: String, auth: Arc<Mutex<dyn Authorized + Send + Sync>>) -> ConnectSharedData {
+    fn new(interf: String, auth: Arc<Mutex<AuthorizeService>>) -> ConnectSharedData {
         ConnectSharedData {
             state_connect_value: Mutex::new(vec![ConnectionState::Idle as u8]),
             ssid_connect_value: Mutex::new(vec![0; SSID_MAX_LENGTH]),
@@ -276,17 +276,12 @@ async fn write_psk(
     Ok(())
 }
 
-use authorize::Authorized;
-
 pub struct ConnectService {
     shared: Arc<ConnectSharedData>,
 }
 
 impl ConnectService {
-    pub fn new(
-        interface: String,
-        auth: Arc<Mutex<dyn Authorized + Send + Sync>>,
-    ) -> ConnectService {
+    pub fn new(interface: String, auth: Arc<Mutex<AuthorizeService>>) -> ConnectService {
         ConnectService {
             shared: Arc::new(ConnectSharedData::new(interface, auth)),
         }

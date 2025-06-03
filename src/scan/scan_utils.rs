@@ -20,7 +20,7 @@ fn escape_invalid_unicode(bytestring: Vec<u8>) -> String {
         let s = std::str::from_utf8(bytes);
         match s {
             Err(e) => {
-                error!("Decoding {:?} failed: {}", bytes, e.to_string());
+                error!("Decoding {bytes:?} failed: {e}");
                 let (good, bad) = bytes.split_at(e.valid_up_to());
                 if !good.is_empty() {
                     escaped += std::str::from_utf8(good).unwrap(); // this cannot fail

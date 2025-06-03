@@ -1,10 +1,10 @@
-use crate::authorize;
+use crate::authorize::AuthorizeService;
 mod scan_utils;
 use bluer::gatt::local::{
-    characteristic_control, service_control, Characteristic, CharacteristicNotifier,
-    CharacteristicNotify, CharacteristicNotifyMethod, CharacteristicRead,
-    CharacteristicReadRequest, CharacteristicWrite, CharacteristicWriteMethod,
-    CharacteristicWriteRequest, ReqError, ReqResult, Service,
+    Characteristic, CharacteristicNotifier, CharacteristicNotify, CharacteristicNotifyMethod,
+    CharacteristicRead, CharacteristicReadRequest, CharacteristicWrite, CharacteristicWriteMethod,
+    CharacteristicWriteRequest, ReqError, ReqResult, Service, characteristic_control,
+    service_control,
 };
 use enclose::enclose;
 use futures::FutureExt;
@@ -72,12 +72,12 @@ struct ScanSharedData {
     select_scan_value: Mutex<Vec<u8>>,
     // Notifier instance for status_scan_value. Only one notification client is supported.
     status_scan_notify_opt: Mutex<Option<CharacteristicNotifier>>,
-    authorized: Arc<Mutex<dyn Authorized + Send + Sync>>,
+    authorized: Arc<Mutex<AuthorizeService>>,
     interface: String,
 }
 
 impl ScanSharedData {
-    fn new(interf: String, auth: Arc<Mutex<dyn Authorized + Send + Sync>>) -> ScanSharedData {
+    fn new(interf: String, auth: Arc<Mutex<AuthorizeService>>) -> ScanSharedData {
         ScanSharedData {
             status_scan_value: Mutex::new(vec![ScanState::Idle as u8]),
             result_scan_value: Mutex::new(vec![0; RESULT_FIELD_LENGTH]),
@@ -281,14 +281,13 @@ async fn write_select(
     *select_scan_value = new_value;
     Ok(())
 }
-use authorize::Authorized;
 
 pub struct ScanService {
     shared: Arc<ScanSharedData>,
 }
 
 impl ScanService {
-    pub fn new(interface: String, auth: Arc<Mutex<dyn Authorized + Send + Sync>>) -> ScanService {
+    pub fn new(interface: String, auth: Arc<Mutex<AuthorizeService>>) -> ScanService {
         ScanService {
             shared: Arc::new(ScanSharedData::new(interface, auth)),
         }

@@ -1,7 +1,6 @@
-use async_trait::async_trait;
 use bluer::gatt::local::{
-    characteristic_control, service_control, Characteristic, CharacteristicWrite,
-    CharacteristicWriteMethod, CharacteristicWriteRequest, ReqError, ReqResult, Service,
+    Characteristic, CharacteristicWrite, CharacteristicWriteMethod, CharacteristicWriteRequest,
+    ReqError, ReqResult, Service, characteristic_control, service_control,
 };
 use enclose::enclose;
 use futures::FutureExt;
@@ -10,11 +9,6 @@ use sha3::Digest;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
-
-#[async_trait]
-pub trait Authorized {
-    async fn is_authorized(&self) -> bool;
-}
 
 pub const AUTHORIZE_SERVICE_UUID: uuid::Uuid =
     uuid::Uuid::from_u128(0xd69a37ee1d8a4329bd2425db4af3c865);
@@ -115,12 +109,9 @@ impl AuthorizeService {
             }
         }
     }
-}
 
-#[async_trait]
-impl Authorized for AuthorizeService {
-    async fn is_authorized(&self) -> bool {
+    pub async fn is_authorized(&self) -> bool {
         let authorized_timeout = self.shared.authorized_timeout.lock().await;
-        return !authorized_timeout.is_zero();
+        !authorized_timeout.is_zero()
     }
 }
